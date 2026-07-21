@@ -1,0 +1,7 @@
+interface:
+  display_name: "Unconventional Moves"
+  short_description: "Generate practical unconventional moves for a goal"
+  default_prompt: "Use $unconventional-moves to generate practical unconventional moves for my goal."
+
+policy:
+  allow_implicit_invocation: true
