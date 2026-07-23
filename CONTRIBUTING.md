@@ -25,4 +25,4 @@ Keep contributions narrow, original, and consistent with the project's safety an
 5. Test with synthetic material from the permitted example topics.
 6. Record limitations or unresolved safety questions with the proposed change.
 
-Direction, evaluation, review, and acceptance remain with Oonyl. Material drafted with OpenAI Codex must remain disclosed in `PROVENANCE.md`.
+Product direction, evaluation, review, and acceptance remain with Oonyl. Contributors must disclose material third-party provenance and licensing obligations.
