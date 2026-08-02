@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Validate a machine-readable Unconventional Moves plan."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+
+MOVE_FIELDS = [
+    "id",
+    "title",
+    "mechanism",
+    "concrete_move",
+    "why_overlooked",
+    "test_48h",
+    "success_signal",
+    "stop_condition",
+    "evidence_status",
+    "bounds",
+]
+UNSAFE = re.compile(r"(?i)\b(?:bypass\s+(?:a\s+)?safety|steal|harass|disable\s+safety|evade\s+(?:law|consent))\b")
+MAX_PLAN_BYTES = 1_000_000
+TOP_LEVEL_FIELDS = {"contract_version", "goal", "high_stakes", "moves", "prioritized_action", "sources"}
+SOURCE_FIELDS = {"title", "publisher", "date", "url", "supports"}
+
+
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def load_plan_json(raw: str) -> object:
+    return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+
+
+def validate_plan_data(data: object, raw: str = "") -> list[str]:
+    failures: list[str] = []
+    if not isinstance(data, dict):
+        return ["plan must be a JSON object"]
+    unknown_top = sorted(set(data) - TOP_LEVEL_FIELDS)
+    if unknown_top:
+        failures.append(f"plan has unknown fields: {', '.join(unknown_top)}")
+    if data.get("contract_version") != "unconventional-moves/v0.1":
+        failures.append("contract_version must be unconventional-moves/v0.1")
+    if not isinstance(data.get("goal"), str) or not data["goal"].strip():
+        failures.append("goal must be a non-empty string")
+    moves = data.get("moves")
+    if not isinstance(moves, list) or not 5 <= len(moves) <= 7:
+        failures.append("moves must contain five to seven entries")
+        moves = []
+    ids: list[str] = []
+    for index, move in enumerate(moves, 1):
+        if not isinstance(move, dict):
+            failures.append(f"move {index} must be an object")
+            continue
+        unknown_move = sorted(set(move) - set(MOVE_FIELDS))
+        if unknown_move:
+            failures.append(f"move {index} has unknown fields: {', '.join(unknown_move)}")
+        missing = [field for field in MOVE_FIELDS if not isinstance(move.get(field), str) or not move[field].strip()]
+        if missing:
+            failures.append(f"move {index} missing non-empty fields: {', '.join(missing)}")
+        move_id = move.get("id")
+        if isinstance(move_id, str):
+            ids.append(move_id)
+        for field in ("concrete_move", "test_48h", "success_signal", "stop_condition"):
+            value = move.get(field, "")
+            if isinstance(value, str) and UNSAFE.search(value):
+                failures.append(f"move {index} contains an unsafe action in {field}")
+    if len(ids) != len(set(ids)):
+        failures.append("move IDs must be unique")
+
+    prioritized = data.get("prioritized_action")
+    if not isinstance(prioritized, str) or not prioritized.strip():
+        failures.append("prioritized_action must be one non-empty string")
+    sources = data.get("sources")
+    if not isinstance(sources, list):
+        failures.append("sources must be an array")
+        sources = []
+    for index, source in enumerate(sources, 1):
+        if not isinstance(source, dict):
+            failures.append(f"source {index} must be an object")
+            continue
+        unknown_source = sorted(set(source) - SOURCE_FIELDS)
+        if unknown_source:
+            failures.append(f"source {index} has unknown fields: {', '.join(unknown_source)}")
+        for field in ("title", "url", "supports"):
+            if not isinstance(source.get(field), str) or not source[field].strip():
+                failures.append(f"source {index} missing non-empty {field}")
+        if isinstance(source.get("url"), str) and not re.match(r"^https?://", source["url"]):
+            failures.append(f"source {index} URL must use http or https")
+    if data.get("high_stakes") is True and not sources:
+        failures.append("high-stakes plan requires at least one current source")
+    if not isinstance(data.get("high_stakes"), bool):
+        failures.append("high_stakes must be boolean")
+    return failures
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("plan", type=Path)
+    args = parser.parse_args()
+    try:
+        raw_bytes = args.plan.read_bytes()
+        if len(raw_bytes) > MAX_PLAN_BYTES:
+            print(f"FAIL plan exceeds {MAX_PLAN_BYTES} bytes")
+            return 1
+        raw = raw_bytes.decode("utf-8")
+        data = load_plan_json(raw)
+    except OSError:
+        print("FAIL plan file cannot be read")
+        return 1
+    except UnicodeDecodeError:
+        print("FAIL plan must be UTF-8 JSON")
+        return 1
+    except (json.JSONDecodeError, ValueError) as exc:
+        print(f"FAIL invalid JSON: {exc}")
+        return 1
+    failures = validate_plan_data(data, raw)
+    if failures:
+        for failure in failures:
+            print(f"FAIL {failure}")
+        return 1
+    print(f"PASS valid plan: {args.plan}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

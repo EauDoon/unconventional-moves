@@ -8,11 +8,11 @@ No private source files, secrets, personal data, proprietary examples, external 
 
 ## Authorship and review
 
-OpenAI Codex assisted with drafting and testing. Oonyl directed, reviewed, and takes responsibility for the result.
+Oonyl directed, reviewed, and takes responsibility for the result.
 
 ## Independence
 
-This is an independent community project. It is not an OpenAI product, and OpenAI does not endorse it.
+This is an independent community project.
 
 ## Example data
 

@@ -12,7 +12,7 @@ It is built for people who want useful strategic range without losing discipline
 | --- | --- | --- |
 | A goal, desired outcome, constraints, non-negotiables, and time horizon | Reframe the problem through distinct mechanisms, then screen and rank the candidates | Five to seven bounded experiments and one prioritized action |
 
-The skill is especially useful when conventional advice has become repetitive, when a team needs several genuinely different options, or when the safest next step is to learn before making a larger commitment.
+The skill is especially useful when conventional advice has become repetitive, when a team needs several genuinely different options, or when the safest next step is to learn before making a larger commitment. The contract is checked by [`scripts/validate.py`](scripts/validate.py) and [`scripts/validate_plan.py`](scripts/validate_plan.py).
 
 ## Quick start
 
@@ -42,6 +42,32 @@ Use $unconventional-moves to generate practical unconventional moves for my goal
 
 The included metadata also permits implicit invocation when a request clearly calls for practical unconventional approaches.
 
+### Package and install
+
+The package builder uses only the Python standard library and produces a
+deterministic ZIP plus SHA-256 checksum:
+
+```powershell
+python .\scripts\validate.py
+python .\scripts\package.py --output .\dist
+Get-FileHash .\dist\unconventional-moves-0.1.0.zip -Algorithm SHA256
+Expand-Archive .\dist\unconventional-moves-0.1.0.zip -DestinationPath .\dist\expanded
+Copy-Item .\dist\expanded\unconventional-moves-0.1.0\skill\unconventional-moves $env:CODEX_HOME\skills\unconventional-moves -Recurse -Force
+```
+
+On Bash:
+
+```bash
+python3 scripts/validate.py
+python3 scripts/package.py --output dist
+sha256sum dist/unconventional-moves-0.1.0.zip
+unzip -q dist/unconventional-moves-0.1.0.zip -d dist/expanded
+cp -R dist/expanded/unconventional-moves-0.1.0/skill/unconventional-moves "$CODEX_HOME/skills/unconventional-moves"
+```
+
+Verify the checksum before copying. The package does not publish or change
+remote metadata.
+
 ### 3. Give it a useful brief
 
 For stronger results, include:
@@ -53,6 +79,10 @@ For stronger results, include:
 - who else could be affected.
 
 If one missing detail would materially change safety or usefulness, the skill may ask one focused question. Otherwise it states its assumptions and proceeds.
+
+For a copy-ready intake and planning worksheet, use
+[`templates/worksheet.md`](templates/worksheet.md). A JSON plan can be checked
+against [`schemas/moves.schema.json`](schemas/moves.schema.json).
 
 ## How the method works
 
@@ -105,11 +135,15 @@ Every valid idea follows the same decision-ready structure:
   constraint, or timing effect that hides it.
 - 48-hour test: A tiny reversible test, including a success signal
   and a stop condition.
+- Success signal: The observable result that supports continuation.
+- Stop condition: The result, risk, or time boundary that ends the test.
 - Evidence status: What is supported, inferred, or speculative.
 - Bounds: Limits on time, cost, exposure, or commitment when material.
+- Sources: Current reliable sources for high-stakes claims, or an explicit
+  statement that no sources are required.
 ```
 
-After the full set, the response ends with:
+After the full set, the response ends with exactly one:
 
 ```text
 Prioritized action: One selected idea, why it should go first,
@@ -151,6 +185,13 @@ Novelty never overrides consent, legality, honesty, or safety.
 
 For health, safety, legal, financial, or similarly consequential goals, material factual claims require current reliable sources. If those sources are unavailable, the skill must say that verification is incomplete and limit the response to source gathering or other non-consequential steps.
 
+## Sources
+
+High-stakes output ends with a Sources section listing each current reliable
+source, its URL, and the claim or boundary it supports. If a source cannot be
+checked, state `Verification incomplete` and limit the response to source
+gathering or a non-consequential experiment.
+
 ## Limitations
 
 - Output quality depends on the clarity and accuracy of the supplied goal and constraints.
@@ -169,8 +210,23 @@ For health, safety, legal, financial, or similarly consequential goals, material
 |-- SECURITY.md
 |-- CONTRIBUTING.md
 |-- PROVENANCE.md
+|-- CHANGELOG.md
+|-- VERSION
+|-- docs/
+|   |-- non-obviousness-rubric.md
+|   `-- release-notes-v0.1.0.md
+|-- schemas/
+|   `-- moves.schema.json
+|-- templates/
+|   `-- worksheet.md
+|-- scripts/
+|   |-- validate.py
+|   |-- validate_plan.py
+|   `-- package.py
 |-- examples/
-|   `-- example-prompts.md
+|   |-- example-prompts.md
+|   |-- example-plan.json
+|   `-- adversarial-fixtures.json
 `-- skill/
     `-- unconventional-moves/
         |-- SKILL.md
@@ -183,6 +239,13 @@ For health, safety, legal, financial, or similarly consequential goals, material
 | [`skill/unconventional-moves/SKILL.md`](skill/unconventional-moves/SKILL.md) | Behavioral instructions and response contract |
 | [`skill/unconventional-moves/agents/openai.yaml`](skill/unconventional-moves/agents/openai.yaml) | Display metadata, default prompt, and implicit-invocation policy |
 | [`examples/example-prompts.md`](examples/example-prompts.md) | Ready-to-use synthetic prompts |
+| [`examples/example-plan.json`](examples/example-plan.json) | Valid machine-readable plan fixture |
+| [`examples/adversarial-fixtures.json`](examples/adversarial-fixtures.json) | Unsafe-goal and injection behavior fixtures |
+| [`templates/worksheet.md`](templates/worksheet.md) | Copy-ready planning worksheet |
+| [`schemas/moves.schema.json`](schemas/moves.schema.json) | JSON response contract |
+| [`scripts/validate.py`](scripts/validate.py) | Repository contract and link checks |
+| [`scripts/validate_plan.py`](scripts/validate_plan.py) | Dependency-light plan validator |
+| [`scripts/package.py`](scripts/package.py) | Deterministic ZIP and checksum builder |
 | [`SECURITY.md`](SECURITY.md) | Security scope and private-reporting guidance |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution rules and validation workflow |
 | [`PROVENANCE.md`](PROVENANCE.md) | Origin, review, and independence disclosures |
@@ -190,8 +253,6 @@ For health, safety, legal, financial, or similarly consequential goals, material
 
 ## Authorship and independence
 
-OpenAI Codex assisted with drafting and testing. Oonyl directed, reviewed, and takes responsibility for the result.
-
-This is an independent community project. It is not an OpenAI product, and OpenAI does not endorse it.
+Oonyl directed, reviewed, and takes responsibility for the result. This is an independent community project.
 
 Released under the MIT License. See [`LICENSE`](LICENSE).

@@ -1,0 +1,21 @@
+[
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "LICENSE",
+  "PROVENANCE.md",
+  "README.md",
+  "SECURITY.md",
+  "VERSION",
+  "docs/release-notes-v0.1.0.md",
+  "examples/adversarial-fixtures.json",
+  "examples/example-plan.json",
+  "examples/example-prompts.md",
+  "package-manifest.json",
+  "schemas/moves.schema.json",
+  "scripts/package.py",
+  "scripts/validate.py",
+  "scripts/validate_plan.py",
+  "skill/unconventional-moves/SKILL.md",
+  "skill/unconventional-moves/agents/openai.yaml",
+  "templates/worksheet.md"
+]
