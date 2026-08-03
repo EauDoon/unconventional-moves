@@ -8,7 +8,7 @@ No private source files, secrets, personal data, proprietary examples, external 
 
 ## Authorship and review
 
-Oonyl directed, reviewed, and takes responsibility for the result.
+EauDoon directed, reviewed, and takes responsibility for the result.
 
 ## Independence
 

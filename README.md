@@ -253,6 +253,6 @@ gathering or a non-consequential experiment.
 
 ## Authorship and independence
 
-Oonyl directed, reviewed, and takes responsibility for the result. This is an independent community project.
+EauDoon directed, reviewed, and takes responsibility for the result. This is an independent community project.
 
 Released under the MIT License. See [`LICENSE`](LICENSE).
