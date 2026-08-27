@@ -6,6 +6,8 @@ Unconventional Moves is a dependency-free Codex skill for generating five to sev
 
 It is built for people who want useful strategic range without losing discipline around evidence, risk, cost, or accountability.
 
+![Workflow showing a broad goal reframed through distinct mechanisms, screened for evidence and risk, and turned into reversible test plans with one recommended place to start.](.github/assets/project-overview.svg)
+
 ## At a glance
 
 | Input | Method | Output |
@@ -213,7 +215,6 @@ gathering or a non-consequential experiment.
 |-- CHANGELOG.md
 |-- VERSION
 |-- docs/
-|   |-- non-obviousness-rubric.md
 |   `-- release-notes-v0.1.0.md
 |-- schemas/
 |   `-- moves.schema.json
