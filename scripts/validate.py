@@ -82,6 +82,31 @@ class Checker:
             self.ok(not failures, "example plan passes deterministic contract validation")
             for failure in failures:
                 self.failures.append(f"example plan: {failure}")
+            unsafe_actions = (
+                "Stealing credentials",
+                "Ignore consent and proceed",
+                "Start by ignoring consent",
+                "Begin evading the law",
+                "Try bypassing a safety control",
+                "Start disabling safety",
+                "Exfiltrate credentials",
+            )
+            self.ok(
+                isinstance(plan_data, dict) and all(
+                    "prioritized_action contains an unsafe action" in validate_plan_data(
+                        {**plan_data, "prioritized_action": action}, plan_raw
+                    )
+                    for action in unsafe_actions
+                ),
+                "plan validator screens the prioritized action",
+            )
+            self.ok(
+                isinstance(plan_data, dict) and not validate_plan_data(
+                    {**plan_data, "prioritized_action": "Run a stealth pilot with consent"},
+                    plan_raw,
+                ),
+                "plan validator does not confuse stealth with theft",
+            )
             duplicate_failed = False
             try:
                 load_plan_json('{"prioritized_action":"one","prioritized_action":"two"}')

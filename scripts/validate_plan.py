@@ -22,7 +22,13 @@ MOVE_FIELDS = [
     "evidence_status",
     "bounds",
 ]
-UNSAFE = re.compile(r"(?i)\b(?:bypass\s+(?:a\s+)?safety|steal|harass|disable\s+safety|evade\s+(?:law|consent))\b")
+UNSAFE = re.compile(
+    r"(?i)\b(?:bypass(?:es|ed|ing)?\s+(?:(?:a|the)\s+)?safety|"
+    r"steal(?:s|ing)?|stole|stolen|harass\w*|"
+    r"disabl(?:e|es|ed|ing)\s+(?:the\s+)?safety|"
+    r"ignor(?:e|es|ed|ing)\s+(?:the\s+)?(?:consent|scope|safety)|exfiltrat\w*|"
+    r"evad(?:e|es|ed|ing)\s+(?:the\s+)?(?:law|consent))\b"
+)
 MAX_PLAN_BYTES = 1_000_000
 TOP_LEVEL_FIELDS = {"contract_version", "goal", "high_stakes", "moves", "prioritized_action", "sources"}
 SOURCE_FIELDS = {"title", "publisher", "date", "url", "supports"}
@@ -84,6 +90,8 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
     prioritized = data.get("prioritized_action")
     if not isinstance(prioritized, str) or not prioritized.strip():
         failures.append("prioritized_action must be one non-empty string")
+    elif UNSAFE.search(prioritized):
+        failures.append("prioritized_action contains an unsafe action")
     sources = data.get("sources")
     if not isinstance(sources, list):
         failures.append("sources must be an array")
