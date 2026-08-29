@@ -109,6 +109,9 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         for field in ("title", "url", "supports"):
             if not isinstance(source.get(field), str) or not source[field].strip():
                 failures.append(f"source {index} missing non-empty {field}")
+        for field in ("publisher", "date"):
+            if field in source and not isinstance(source[field], str):
+                failures.append(f"source {index} {field} must be a string")
         if isinstance(source.get("url"), str) and not re.match(r"^https?://", source["url"]):
             failures.append(f"source {index} URL must use http or https")
     if data.get("high_stakes") is True and not sources:

@@ -107,6 +107,24 @@ class Checker:
                 ),
                 "plan validator does not confuse stealth with theft",
             )
+            source_metadata_failures = validate_plan_data(
+                {
+                    **plan_data,
+                    "sources": [{
+                        "title": "Synthetic source",
+                        "publisher": {"name": "not a string"},
+                        "date": 2026,
+                        "url": "https://example.test/source",
+                        "supports": "A synthetic boundary.",
+                    }],
+                },
+                plan_raw,
+            ) if isinstance(plan_data, dict) else []
+            self.ok(
+                "source 1 publisher must be a string" in source_metadata_failures
+                and "source 1 date must be a string" in source_metadata_failures,
+                "plan validator enforces optional source metadata types",
+            )
             duplicate_failed = False
             try:
                 load_plan_json('{"prioritized_action":"one","prioritized_action":"two"}')
