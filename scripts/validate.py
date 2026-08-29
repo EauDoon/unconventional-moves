@@ -113,6 +113,12 @@ class Checker:
             except ValueError:
                 duplicate_failed = True
             self.ok(duplicate_failed, "plan parser rejects duplicate JSON keys")
+            nested_failed = False
+            try:
+                load_plan_json("[" * 10_000 + "]" * 10_000)
+            except ValueError:
+                nested_failed = True
+            self.ok(nested_failed, "plan parser rejects excessive JSON nesting")
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             self.failures.append(f"example plan unreadable: {exc}")
 

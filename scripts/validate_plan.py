@@ -48,7 +48,10 @@ def _reject_constant(value: str) -> None:
 
 
 def load_plan_json(raw: str) -> object:
-    return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    try:
+        return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    except RecursionError as exc:
+        raise ValueError("JSON nesting is too deep") from exc
 
 
 def validate_plan_data(data: object, raw: str = "") -> list[str]:
