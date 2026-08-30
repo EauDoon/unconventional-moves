@@ -1,18 +1,38 @@
+import contextlib
+import io
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from validate import Checker
-from validate_plan import validate_plan_data
+from validate_plan import load_plan_json, main as validate_plan_main, validate_plan_data
 
 
 class ValidateTests(unittest.TestCase):
+    def test_duplicate_json_key_diagnostic_does_not_echo_the_key(self) -> None:
+        marker = "private_detail"
+        raw = '{"private_detail": 1, "private_detail": 2}'
+        with self.assertRaisesRegex(ValueError, "^JSON object contains a duplicate key$") as raised:
+            load_plan_json(raw)
+        self.assertNotIn(marker, str(raised.exception))
+
+        with tempfile.TemporaryDirectory() as directory:
+            plan = Path(directory) / "plan.json"
+            plan.write_text(raw, encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["validate_plan.py", str(plan)]), contextlib.redirect_stdout(output):
+                self.assertEqual(validate_plan_main(), 1)
+
+        self.assertIn("JSON object contains a duplicate key", output.getvalue())
+        self.assertNotIn(marker, output.getvalue())
+
     def test_source_urls_are_absolute_and_credential_free(self) -> None:
         plan = json.loads((ROOT / "examples" / "example-plan.json").read_text(encoding="utf-8"))
         source = {
