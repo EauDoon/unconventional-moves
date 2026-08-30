@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.package import version_for
+from scripts.package import MAX_VERSION_LENGTH, version_for
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +32,7 @@ class PackageTests(unittest.TestCase):
                 "../../../escape",
                 "1.2.3/../../escape",
                 "1.2.3:*?",
+                f"1.{'9' * MAX_VERSION_LENGTH}.3",
             ):
                 with self.subTest(version=invalid):
                     version_path.write_text(invalid, encoding="utf-8")
@@ -43,19 +44,36 @@ class PackageTests(unittest.TestCase):
             root = Path(td) / "project"
             (root / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
-            (root / "VERSION").write_text("../../../escape\n", encoding="utf-8")
             (root / "package-manifest.json").write_text("[]", encoding="utf-8")
             output = root / "dist"
 
-            result = subprocess.run(
-                [sys.executable, str(root / "scripts/package.py"), "--output", str(output)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            for invalid in (
+                "../../../escape\n",
+                f"1.{'9' * MAX_VERSION_LENGTH}.3\n",
+            ):
+                with self.subTest(version=invalid.rstrip("\n")):
+                    (root / "VERSION").write_text(invalid, encoding="utf-8")
+                    before = {
+                        path.relative_to(root).as_posix()
+                        for path in root.rglob("*")
+                    }
 
-            self.assertNotEqual(result.returncode, 0)
-            self.assertFalse(output.exists())
+                    result = subprocess.run(
+                        [sys.executable, str(root / "scripts/package.py"), "--output", str(output)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(output.exists())
+                    self.assertEqual(
+                        {
+                            path.relative_to(root).as_posix()
+                            for path in root.rglob("*")
+                        },
+                        before,
+                    )
 
     def test_invalid_rebuild_preserves_previous_release(self):
         with tempfile.TemporaryDirectory() as td:
