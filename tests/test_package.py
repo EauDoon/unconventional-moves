@@ -10,9 +10,26 @@ from scripts.package import MAX_VERSION_LENGTH, version_for
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_LENGTH_VERSION = f"1.{'9' * 60}.3"
+OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_package_version_length_boundary(self):
+        self.assertEqual(MAX_VERSION_LENGTH, 64)
+        self.assertEqual(len(MAX_LENGTH_VERSION), 64)
+        self.assertEqual(len(OVERLONG_VERSION), 65)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version_path = root / "VERSION"
+            version_path.write_text(MAX_LENGTH_VERSION, encoding="utf-8")
+            self.assertEqual(version_for(root), MAX_LENGTH_VERSION)
+
+            version_path.write_text(OVERLONG_VERSION, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "at most 64 characters"):
+                version_for(root)
+
     def test_package_version_cannot_escape_artifact_paths(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -32,7 +49,7 @@ class PackageTests(unittest.TestCase):
                 "../../../escape",
                 "1.2.3/../../escape",
                 "1.2.3:*?",
-                f"1.{'9' * MAX_VERSION_LENGTH}.3",
+                OVERLONG_VERSION,
             ):
                 with self.subTest(version=invalid):
                     version_path.write_text(invalid, encoding="utf-8")
@@ -49,7 +66,7 @@ class PackageTests(unittest.TestCase):
 
             for invalid in (
                 "../../../escape\n",
-                f"1.{'9' * MAX_VERSION_LENGTH}.3\n",
+                f"{OVERLONG_VERSION}\n",
             ):
                 with self.subTest(version=invalid.rstrip("\n")):
                     (root / "VERSION").write_text(invalid, encoding="utf-8")
