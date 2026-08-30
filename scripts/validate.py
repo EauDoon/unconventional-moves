@@ -7,13 +7,172 @@ import argparse
 import json
 import re
 import sys
+from itertools import chain
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from validate_plan import load_plan_json, validate_plan_data
 
 
-LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
+EXTERNAL_SCHEMES = {"http", "https", "mailto"}
+MARKDOWN_ESCAPABLE = frozenset(r'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
+
+
+def _is_escaped(text: str, index: int) -> bool:
+    backslashes = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        backslashes += 1
+        cursor -= 1
+    return backslashes % 2 == 1
+
+
+def _unescape_markdown(value: str) -> str:
+    result: list[str] = []
+    cursor = 0
+    while cursor < len(value):
+        if (
+            value[cursor] == "\\"
+            and cursor + 1 < len(value)
+            and value[cursor + 1] in MARKDOWN_ESCAPABLE
+        ):
+            result.append(value[cursor + 1])
+            cursor += 2
+        else:
+            result.append(value[cursor])
+            cursor += 1
+    return "".join(result)
+
+
+def _parse_link_title(text: str, cursor: int) -> int:
+    opener = text[cursor]
+    closer = ")" if opener == "(" else opener
+    cursor += 1
+    while cursor < len(text):
+        if text[cursor] in "\r\n":
+            raise ValueError("link title contains a line break")
+        if text[cursor] == "\\" and cursor + 1 < len(text):
+            cursor += 2
+            continue
+        if text[cursor] == closer:
+            return cursor + 1
+        cursor += 1
+    raise ValueError("link title is not terminated")
+
+
+def inline_link_targets(text: str):
+    """Yield every inline Markdown destination and fail closed on malformed syntax."""
+    search_from = 0
+    while True:
+        marker = text.find("](", search_from)
+        if marker < 0:
+            return
+        search_from = marker + 2
+        if _is_escaped(text, marker):
+            continue
+
+        cursor = marker + 2
+        while cursor < len(text) and text[cursor] in " \t":
+            cursor += 1
+        destination_start = cursor
+
+        try:
+            if cursor >= len(text):
+                raise ValueError("link destination is missing")
+
+            if text[cursor] == "<":
+                cursor += 1
+                destination_start = cursor
+                while cursor < len(text):
+                    if text[cursor] in "\r\n":
+                        raise ValueError("angle-bracket destination contains a line break")
+                    if text[cursor] == "\\" and cursor + 1 < len(text):
+                        cursor += 2
+                        continue
+                    if text[cursor] == ">":
+                        break
+                    cursor += 1
+                if cursor >= len(text) or text[cursor] != ">":
+                    raise ValueError("angle-bracket destination is not terminated")
+                raw_target = text[destination_start:cursor]
+                cursor += 1
+            else:
+                depth = 0
+                while cursor < len(text):
+                    character = text[cursor]
+                    if character == "\\" and cursor + 1 < len(text):
+                        cursor += 2
+                        continue
+                    if character == "(":
+                        depth += 1
+                        if depth > 32:
+                            raise ValueError("link destination nesting exceeds 32 levels")
+                    elif character == ")":
+                        if depth == 0:
+                            break
+                        depth -= 1
+                    elif character in " \t\r\n":
+                        if depth:
+                            raise ValueError("link destination has unbalanced parentheses")
+                        break
+                    cursor += 1
+                if depth:
+                    raise ValueError("link destination has unbalanced parentheses")
+                raw_target = text[destination_start:cursor]
+
+            while cursor < len(text) and text[cursor] in " \t":
+                cursor += 1
+            if cursor < len(text) and text[cursor] in {'"', "'", "("}:
+                cursor = _parse_link_title(text, cursor)
+                while cursor < len(text) and text[cursor] in " \t":
+                    cursor += 1
+            if cursor >= len(text) or text[cursor] != ")":
+                raise ValueError("inline link is not terminated")
+
+            yield _unescape_markdown(raw_target), None
+            search_from = cursor + 1
+        except ValueError as exc:
+            yield None, f"offset {marker}: {exc}"
+
+
+def reference_definition_bodies(text: str):
+    offset = 0
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        indent = len(line) - len(line.lstrip(" "))
+        if indent <= 3 and indent < len(line) and line[indent] == "[":
+            cursor = indent + 1
+            label_has_content = False
+            while cursor < len(line):
+                if line[cursor] == "\\" and cursor + 1 < len(line):
+                    label_has_content = True
+                    cursor += 2
+                    continue
+                if line[cursor] == "]":
+                    if label_has_content and cursor + 1 < len(line) and line[cursor + 1] == ":":
+                        yield line[cursor + 2:].lstrip(" \t"), offset + indent
+                    break
+                label_has_content = True
+                cursor += 1
+        offset += len(raw_line)
+
+
+def reference_link_targets(text: str):
+    """Yield destinations from CommonMark reference definitions."""
+    for body, offset in reference_definition_bodies(text):
+        if not body:
+            yield None, f"offset {offset}: multiline reference definition is unsupported"
+            continue
+        parsed = list(inline_link_targets(f"[reference]({body})"))
+        if len(parsed) != 1:
+            yield None, f"offset {offset}: reference definition is ambiguous"
+            continue
+        target, syntax_error = parsed[0]
+        if syntax_error:
+            yield None, f"offset {offset}: invalid reference definition ({syntax_error})"
+        else:
+            yield target, None
 
 
 class Checker:
@@ -43,17 +202,49 @@ class Checker:
             return None
 
     def check_links(self) -> None:
+        root_resolved = self.root.resolve()
         for path in sorted(self.root.rglob("*.md")):
             if ".git" in path.parts or "dist" in path.parts:
                 continue
-            for raw in LINK.findall(path.read_text(encoding="utf-8")):
-                target = raw.strip().split()[0].strip("<>")
-                if target.startswith(("http://", "https://", "mailto:", "#")):
+            content = path.read_text(encoding="utf-8")
+            targets = chain(inline_link_targets(content), reference_link_targets(content))
+            for target, syntax_error in targets:
+                if syntax_error:
+                    self.ok(
+                        False,
+                        f"link syntax is valid: {path.relative_to(self.root)} -> {syntax_error}",
+                    )
                     continue
-                relative = target.split("#", 1)[0]
-                if not relative:
+                assert target is not None
+                try:
+                    parsed = urlsplit(target)
+                except ValueError:
+                    self.ok(
+                        False,
+                        f"link target is valid: {path.relative_to(self.root)} -> {target}",
+                    )
                     continue
-                candidate = (path.parent / relative).resolve()
+                if parsed.scheme.lower() in EXTERNAL_SCHEMES or parsed.netloc:
+                    continue
+                if not parsed.path:
+                    continue
+                try:
+                    relative = unquote(parsed.path, encoding="utf-8", errors="strict")
+                except UnicodeDecodeError:
+                    self.ok(
+                        False,
+                        f"link path is UTF-8: {path.relative_to(self.root)} -> {target}",
+                    )
+                    continue
+                portable_relative = relative.replace("\\", "/")
+                candidate = (path.parent / portable_relative).resolve()
+                inside_repo = candidate == root_resolved or root_resolved in candidate.parents
+                self.ok(
+                    inside_repo,
+                    f"link stays inside repo: {path.relative_to(self.root)} -> {target}",
+                )
+                if not inside_repo:
+                    continue
                 self.ok(candidate.exists(), f"link exists: {path.relative_to(self.root)} -> {target}")
 
     def run(self) -> None:
