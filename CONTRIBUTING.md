@@ -22,7 +22,7 @@ Keep contributions narrow, original, and consistent with the project's safety an
 
 1. Explain the behavior being changed and why it belongs in this skill.
 2. Make the smallest coherent change.
-3. Run `python scripts/validate.py` and validate at least one JSON plan with `python scripts/validate_plan.py examples/example-plan.json`.
+3. Run `python scripts/validate.py`, `python scripts/validate_plan.py examples/example-plan.json`, and `python -m unittest discover -s tests -v`.
 4. Scan the repository for placeholders, disallowed punctuation, private identifiers, local paths, email addresses, and credential-like patterns.
 5. Test with synthetic material from the permitted example topics.
 6. Record limitations or unresolved safety questions with the proposed change.

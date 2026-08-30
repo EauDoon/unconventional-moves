@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from pathlib import PurePosixPath
+from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
@@ -40,20 +41,23 @@ def main() -> int:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     archive = output_dir / f"unconventional-moves-{version}.zip"
     checksum = archive.with_suffix(archive.suffix + ".sha256")
-    for path in (archive, checksum):
-        if path.exists():
-            path.unlink()
+    files = files_for(root)
     prefix = f"unconventional-moves-{version}"
-    with ZipFile(archive, "w", compression=ZIP_DEFLATED, compresslevel=9) as handle:
-        for path in files_for(root):
-            info = ZipInfo(f"{prefix}/{path.relative_to(root).as_posix()}")
-            info.date_time = (2020, 1, 1, 0, 0, 0)
-            info.compress_type = ZIP_DEFLATED
-            info.create_system = 3
-            info.external_attr = 0o100644 << 16
-            handle.writestr(info, path.read_bytes())
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    checksum.write_text(f"{digest}  {archive.name}\n", encoding="ascii", newline="\n")
+    with TemporaryDirectory(dir=output_dir) as staging:
+        staged_archive = Path(staging) / archive.name
+        staged_checksum = Path(staging) / checksum.name
+        with ZipFile(staged_archive, "w", compression=ZIP_DEFLATED, compresslevel=9) as handle:
+            for path in files:
+                info = ZipInfo(f"{prefix}/{path.relative_to(root).as_posix()}")
+                info.date_time = (2020, 1, 1, 0, 0, 0)
+                info.compress_type = ZIP_DEFLATED
+                info.create_system = 3
+                info.external_attr = 0o100644 << 16
+                handle.writestr(info, path.read_bytes())
+        digest = hashlib.sha256(staged_archive.read_bytes()).hexdigest()
+        staged_checksum.write_bytes(f"{digest}  {archive.name}\n".encode("ascii"))
+        staged_archive.replace(archive)
+        staged_checksum.replace(checksum)
     print(archive)
     print(checksum)
     print(digest)
