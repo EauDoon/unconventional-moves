@@ -6,10 +6,27 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from pathlib import PurePosixPath
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+
+
+VERSION_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
+# Keep the version-derived archive name comfortably below common 255-byte
+# filename-component limits. The accepted grammar is ASCII-only.
+MAX_VERSION_LENGTH = 64
+
+
+def version_for(root: Path) -> str:
+    raw = (root / "VERSION").read_text(encoding="utf-8")
+    version = raw[:-1] if raw.endswith("\n") else raw
+    if len(version) > MAX_VERSION_LENGTH or VERSION_PATTERN.fullmatch(version) is None:
+        raise ValueError(
+            f"VERSION must contain a semantic X.Y.Z version of at most {MAX_VERSION_LENGTH} characters"
+        )
+    return version
 
 
 def files_for(root: Path) -> list[Path]:
@@ -36,9 +53,9 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("dist"))
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    version = version_for(root)
     output_dir = args.output.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    version = (root / "VERSION").read_text(encoding="utf-8").strip()
     archive = output_dir / f"unconventional-moves-{version}.zip"
     checksum = archive.with_suffix(archive.suffix + ".sha256")
     files = files_for(root)

@@ -6,11 +6,92 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.package import MAX_VERSION_LENGTH, version_for
+
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_LENGTH_VERSION = f"1.{'9' * 60}.3"
+OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_package_version_length_boundary(self):
+        self.assertEqual(MAX_VERSION_LENGTH, 64)
+        self.assertEqual(len(MAX_LENGTH_VERSION), 64)
+        self.assertEqual(len(OVERLONG_VERSION), 65)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version_path = root / "VERSION"
+            version_path.write_text(MAX_LENGTH_VERSION, encoding="utf-8")
+            self.assertEqual(version_for(root), MAX_LENGTH_VERSION)
+
+            version_path.write_text(OVERLONG_VERSION, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "at most 64 characters"):
+                version_for(root)
+
+    def test_package_version_cannot_escape_artifact_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version_path = root / "VERSION"
+            version_path.write_text("1.2.3\n", encoding="utf-8")
+            self.assertEqual(version_for(root), "1.2.3")
+
+            for invalid in (
+                "",
+                "1.2",
+                "01.2.3",
+                "1.2.3-alpha",
+                "v1.2.3",
+                " 1.2.3",
+                "1.2.3 ",
+                "1.2.3\n\n",
+                "../../../escape",
+                "1.2.3/../../escape",
+                "1.2.3:*?",
+                OVERLONG_VERSION,
+            ):
+                with self.subTest(version=invalid):
+                    version_path.write_text(invalid, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "semantic X.Y.Z"):
+                        version_for(root)
+
+    def test_invalid_version_creates_no_output_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "project"
+            (root / "scripts").mkdir(parents=True)
+            shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
+            (root / "package-manifest.json").write_text("[]", encoding="utf-8")
+            output = root / "dist"
+
+            for invalid in (
+                "../../../escape\n",
+                f"{OVERLONG_VERSION}\n",
+            ):
+                with self.subTest(version=invalid.rstrip("\n")):
+                    (root / "VERSION").write_text(invalid, encoding="utf-8")
+                    before = {
+                        path.relative_to(root).as_posix()
+                        for path in root.rglob("*")
+                    }
+
+                    result = subprocess.run(
+                        [sys.executable, str(root / "scripts/package.py"), "--output", str(output)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(output.exists())
+                    self.assertEqual(
+                        {
+                            path.relative_to(root).as_posix()
+                            for path in root.rglob("*")
+                        },
+                        before,
+                    )
+
     def test_invalid_rebuild_preserves_previous_release(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "project"
