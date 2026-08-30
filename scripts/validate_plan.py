@@ -8,6 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 MOVE_FIELDS = [
@@ -32,6 +33,26 @@ UNSAFE = re.compile(
 MAX_PLAN_BYTES = 1_000_000
 TOP_LEVEL_FIELDS = {"contract_version", "goal", "high_stakes", "moves", "prioritized_action", "sources"}
 SOURCE_FIELDS = {"title", "publisher", "date", "url", "supports"}
+
+
+def _valid_source_url(value: str) -> bool:
+    if any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.lower() in {"http", "https"}
+        and bool(parsed.netloc)
+        and bool(parsed.hostname)
+        and "%" not in parsed.hostname
+        and "\\" not in parsed.hostname
+        and parsed.username is None
+        and parsed.password is None
+        and (port is None or 1 <= port <= 65535)
+    )
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -112,7 +133,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         for field in ("publisher", "date"):
             if field in source and not isinstance(source[field], str):
                 failures.append(f"source {index} {field} must be a string")
-        if isinstance(source.get("url"), str) and not re.match(r"^https?://", source["url"]):
+        if isinstance(source.get("url"), str) and not _valid_source_url(source["url"]):
             failures.append(f"source {index} URL must use http or https")
     if data.get("high_stakes") is True and not sources:
         failures.append("high-stakes plan requires at least one current source")
