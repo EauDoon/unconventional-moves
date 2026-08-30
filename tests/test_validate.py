@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -8,9 +9,42 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from validate import Checker
+from validate_plan import validate_plan_data
 
 
 class ValidateTests(unittest.TestCase):
+    def test_source_urls_are_absolute_and_credential_free(self) -> None:
+        plan = json.loads((ROOT / "examples" / "example-plan.json").read_text(encoding="utf-8"))
+        source = {
+            "title": "Synthetic source",
+            "url": "https://example.test/source",
+            "supports": "A synthetic boundary.",
+        }
+        valid = (
+            "https://example.test/source?id=1#claim",
+            "http://localhost:8080/source",
+            "https://[2001:db8::1]/source",
+        )
+        invalid = (
+            "https://",
+            "https://u@[2001:db8::1]/source",
+            "https://exa mple.test/source",
+            "https://exa%20mple.test/source",
+            "https://example.test:invalid/source",
+            "javascript:https://example.test/source",
+            "https://example.test/source\nnext",
+        )
+
+        for url in valid:
+            with self.subTest(url=url):
+                candidate = {**plan, "sources": [{**source, "url": url}]}
+                self.assertNotIn("source 1 URL must use http or https", validate_plan_data(candidate))
+
+        for url in invalid:
+            with self.subTest(url=url):
+                candidate = {**plan, "sources": [{**source, "url": url}]}
+                self.assertIn("source 1 URL must use http or https", validate_plan_data(candidate))
+
     def test_link_outside_repository_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
