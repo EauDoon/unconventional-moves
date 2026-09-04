@@ -17,6 +17,10 @@ from validate_plan import load_plan_json, validate_plan_data
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
 MARKDOWN_ESCAPABLE = frozenset(r'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
+# Em dash (U+2014, ASCII minus here), en dash (U+2013, ASCII minus here), figure dash (U+2012), horizontal bar (U+2015),
+# minus sign (U+2212), and the mdash entity / ndash entity HTML entities.
+_DASH_CHARS = frozenset("\u2012\u2013\u2014\u2015\u2212")
+_DASH_ENTITIES = (chr(0x26) + "mdash" + chr(0x3B), chr(0x26) + "ndash" + chr(0x3B))
 
 
 def _is_escaped(text: str, index: int) -> bool:
@@ -346,7 +350,7 @@ class Checker:
                 content = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            self.ok("\u2014" not in content, f"no em dash: {path.relative_to(self.root)}")
+            self.ok(_DASH_CHARS.isdisjoint(content) and not any(entity in content for entity in _DASH_ENTITIES), f"no em or en dash: {path.relative_to(self.root)}")
             if path.suffix in {".md", ".yaml", ".yml", ".json"}:
                 self.ok(UNSAFE_STRUCTURE.search(content) is None, f"no prohibited unsafe structure: {path.relative_to(self.root)}")
         self.check_links()
