@@ -212,6 +212,19 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_printable_card_contains_all_bounds_and_escapes_authored_content(self):
+        from moves import render_card, plan_digest
+        plan = bounded_example()
+        plan["moves"][0]["stop_condition"] = '<img src=x onerror="alert(1)"> [unsafe](https://example.org)'
+        output = render_card(plan)
+        self.assertIn(plan_digest(plan), output)
+        self.assertNotIn("<img", output)
+        self.assertNotIn("[unsafe](", output)
+        self.assertEqual(output.count("- [ ]"), 4)
+        for field in plan["moves"][0]["experiment"]:
+            self.assertIn(field.replace("_", " ").title(), output)
+        self.assertIn("none verified", output)
+
     def test_revision_review_identifies_expanded_bounds_and_context_changes(self):
         from moves import compare_plans
         before = bounded_example()

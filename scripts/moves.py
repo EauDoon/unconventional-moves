@@ -116,6 +116,21 @@ def experiment_card(plan: dict) -> dict:
 OUTCOME_FIELDS = {"contract_version", "plan_sha256", "move_id", "observed_value", "elapsed_hours", "active_minutes", "stop_triggered", "consent_confirmed", "notes"}
 
 
+def render_card(plan: dict) -> str:
+    card = experiment_card(plan)
+    lines = ["# Experiment review card", "", "Human review required. No test has been started.", ""]
+    for field in ("plan_sha256", "goal", "move_id", "concrete_move", "success_signal", "stop_condition", "high_stakes"):
+        lines.append("- **" + field.replace("_", " ").title() + ":** " + markdown_text(str(card[field])))
+    lines.extend(["", "## Declared experiment", ""])
+    for field, value in card["experiment"].items():
+        lines.append("- **" + field.replace("_", " ").title() + ":** " + markdown_text(str(value)))
+    lines.extend(["", "## Review before starting", ""])
+    lines.extend("- [ ] " + markdown_text(item) for item in card["review_before_start"])
+    lines.extend(["", "**Recorded first step and reason:** " + markdown_text(plan["prioritized_action"]), "",
+                  "Source claims: " + str(len(plan["sources"])) + " supplied; none verified by this card.", "", card["limitation"], ""])
+    return "\n".join(lines)
+
+
 def evaluate_outcome(plan: dict, outcome: object) -> dict:
     move = selected_move(plan)
     if not isinstance(outcome, dict) or set(outcome) != OUTCOME_FIELDS:
@@ -342,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--output", type=Path)
     card = commands.add_parser("card", help="Prepare a review-only card for the selected move")
     card.add_argument("plan", type=Path)
+    card.add_argument("--format", choices=["json", "markdown"], default="json")
     card.add_argument("--output", type=Path)
     outcome = commands.add_parser("outcome", help="Compare reported observations with declared bounds")
     outcome.add_argument("plan", type=Path)
@@ -375,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "render":
             emit(render_plan(read_plan(args.plan)), args.output)
         elif args.command == "card":
-            emit(json.dumps(experiment_card(read_plan(args.plan)), indent=2) + "\n", args.output)
+            plan = read_plan(args.plan)
+            emit(render_card(plan) if args.format == "markdown" else json.dumps(experiment_card(plan), indent=2) + "\n", args.output)
         elif args.command == "outcome":
             result = evaluate_outcome(read_plan(args.plan), read_json_file(args.observation))
             emit(json.dumps(result, indent=2) + "\n", args.output)
