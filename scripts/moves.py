@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -32,16 +33,49 @@ def emit(content: str, output: Path | None) -> None:
             handle.write(content)
 
 
+def review_plan(plan: dict) -> dict:
+    """Deterministic editorial prompts, not a safety or novelty certification."""
+    findings = []
+    for field in ("mechanism", "concrete_move", "test_48h"):
+        seen = {}
+        for move in plan["moves"]:
+            normalized = " ".join(move[field].casefold().split())
+            if normalized in seen:
+                findings.append({"code": "repeated_" + field, "move_id": move["id"],
+                                 "related_move_id": seen[normalized],
+                                 "message": "Review whether these moves provide distinct learning."})
+            else:
+                seen[normalized] = move["id"]
+    for move in plan["moves"]:
+        if not re.search(r"(?i)\b(fact|source|prompt|inferen\w*|speculat\w*|hypothes\w*|assum\w*)\b", move["evidence_status"]):
+            findings.append({"code": "evidence_label_unclear", "move_id": move["id"],
+                             "message": "Separate supported facts from inference and speculation."})
+    if plan["high_stakes"]:
+        findings.append({"code": "source_verification_required", "message":
+                         "A human must verify source currency, authority, relevance, and consequential boundaries before proceeding."})
+    if plan["contract_version"].endswith("v0.1"):
+        findings.append({"code": "unstructured_bounds", "message": "Version 0.1 bounds require manual review; version 0.2 adds measurable fields."})
+    return {"contract_valid": True, "review_complete": False, "findings": findings,
+            "human_checks": ["Do the mechanisms differ in practice?", "Are costs, consent, and rollback realistic?",
+                             "Does the success signal measure the goal?", "Does one selected action follow from the stated constraints?"],
+            "limitation": "Text checks cannot establish novelty, truth, safety, consent, or likely effectiveness."}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
+    review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
+    review.add_argument("plan", type=Path)
+    review.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "review":
+            emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)
         return 1

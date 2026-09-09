@@ -74,3 +74,21 @@ class AuthoringTests(unittest.TestCase):
             original = path.read_bytes()
             self.assertEqual(main(["init", "--output", str(path)]), 1)
             self.assertEqual(path.read_bytes(), original)
+
+
+class ReviewTests(unittest.TestCase):
+    def test_normalized_duplicates_and_human_gate(self):
+        from moves import review_plan
+        plan = bounded_example()
+        plan["moves"][1]["mechanism"] = " PRECOMMITMENT  "
+        result = review_plan(plan)
+        self.assertFalse(result["review_complete"])
+        self.assertIn("repeated_mechanism", [f["code"] for f in result["findings"]])
+        self.assertNotIn("score", result)
+
+    def test_high_stakes_requires_source_review(self):
+        from moves import review_plan
+        plan = bounded_example()
+        plan["high_stakes"] = True
+        result = review_plan(plan)
+        self.assertIn("source_verification_required", [f["code"] for f in result["findings"]])
