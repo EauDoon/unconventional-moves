@@ -11,6 +11,7 @@ import re
 import sys
 from pathlib import Path
 from decimal import Decimal, localcontext
+from datetime import date
 
 try:
     from .validate_plan import read_json_file, validate_plan_data
@@ -194,6 +195,33 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def iso_date(value: str) -> date:
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("date must use YYYY-MM-DD")
+    return date.fromisoformat(value)
+
+
+def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
+    reference = iso_date(as_of)
+    if type(max_age_days) is not int or not 0 <= max_age_days <= 36500:
+        raise ValueError("max age must be an integer from 0 to 36500 days")
+    sources = []
+    for index, source in enumerate(plan["sources"], 1):
+        declared = source.get("date", "")
+        age, status = None, "date_missing"
+        if declared:
+            try:
+                age = (reference - iso_date(declared)).days
+                status = "future_date" if age < 0 else "older_than_threshold" if age > max_age_days else "within_declared_threshold"
+            except ValueError:
+                status = "date_invalid"
+        sources.append({"source": index, "title": source["title"], "declared_date": declared or None,
+                        "age_days": age, "status": status})
+    return {"plan_sha256": plan_digest(plan), "as_of": as_of, "max_age_days": max_age_days,
+            "sources": sources, "sources_absent": not sources, "human_verification_required": True,
+            "limitation": "Dates are user-declared. No URL was opened and no publisher, claim, relevance, or actual currency was verified."}
+
+
 def review_timeline(plan: dict, observations: object) -> dict:
     if not isinstance(observations, list) or not 1 <= len(observations) <= 100:
         raise ValueError("timeline requires 1 to 100 cumulative observations")
@@ -258,6 +286,11 @@ def main(argv: list[str] | None = None) -> int:
     timeline.add_argument("plan", type=Path)
     timeline.add_argument("observations", type=Path)
     timeline.add_argument("--output", type=Path)
+    sources = commands.add_parser("sources", help="Audit declared source dates without network access")
+    sources.add_argument("plan", type=Path)
+    sources.add_argument("--as-of", required=True)
+    sources.add_argument("--max-age-days", type=int, required=True)
+    sources.add_argument("--output", type=Path)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -280,6 +313,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "sources":
+            result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
             result = review_timeline(read_plan(args.plan), read_json_file(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)

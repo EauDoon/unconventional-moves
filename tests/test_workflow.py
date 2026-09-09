@@ -212,6 +212,19 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_declared_dates_have_explicit_reference_and_never_claim_verification(self):
+        from moves import audit_sources
+        plan = bounded_example()
+        plan["sources"] = [{"title": "Synthetic source", "url": "https://example.org", "supports": "Example", "date": value}
+                           for value in ("", "2026-02-30", "2026-09-11", "2025-01-01", "2026-09-10")]
+        result = audit_sources(plan, "2026-09-10", 30)
+        self.assertEqual([item["status"] for item in result["sources"]],
+                         ["date_missing", "date_invalid", "future_date", "older_than_threshold", "within_declared_threshold"])
+        self.assertTrue(result["human_verification_required"])
+        for as_of, maximum in (("20260910", 30), ("2026-02-30", 30), ("2026-09-10", -1)):
+            with self.assertRaises(ValueError):
+                audit_sources(plan, as_of, maximum)
+
     def test_timeline_preserves_stops_and_rejects_reset_or_mixed_checkpoints(self):
         from moves import review_timeline
         plan = bounded_example()

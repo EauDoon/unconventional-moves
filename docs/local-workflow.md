@@ -47,6 +47,14 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Audit declared source dates against a reference date and age threshold you choose:
+
+```sh
+python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
+```
+
+Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
+
 Review several checkpoints from one revision and selected move:
 
 ```sh
