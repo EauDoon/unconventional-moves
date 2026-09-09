@@ -7,12 +7,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from validate import Checker
-from validate_plan import load_plan_json, main as validate_plan_main, validate_plan_data
+from validate_plan import load_plan_json, validate_plan_data
+from validate_plan import main as validate_plan_main
 
 
 class ValidateTests(unittest.TestCase):

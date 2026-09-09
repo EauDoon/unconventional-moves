@@ -13,7 +13,6 @@ from urllib.parse import unquote, urlsplit
 
 from validate_plan import load_plan_json, validate_plan_data
 
-
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
 MARKDOWN_ESCAPABLE = frozenset(r'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
@@ -255,7 +254,7 @@ class Checker:
         skill = self.read("skill/unconventional-moves/SKILL.md")
         readme = self.read("README.md")
         yaml = self.read("skill/unconventional-moves/agents/openai.yaml")
-        self.ok(skill.startswith("\n---") or skill.startswith("---"), "SKILL.md has frontmatter")
+        self.ok(skill.startswith(("\n---", "---")), "SKILL.md has frontmatter")
         self.ok("name: unconventional-moves" in skill, "frontmatter keeps technical skill identifier")
         self.ok("## Sources" in skill, "skill has explicit Sources section")
         self.ok(len(re.findall(r"^\*\*Prioritized action:", skill, re.MULTILINE)) == 1, "skill names one prioritized action contract")

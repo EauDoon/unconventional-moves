@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-
 MOVE_FIELDS = [
     "id",
     "title",
