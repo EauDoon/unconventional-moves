@@ -47,6 +47,14 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
+
+```sh
+python scripts/moves.py observation-draft draft.json --output observation.json
+```
+
+The draft starts with an unavailable measurement, zero elapsed/active time, false consent/stop flags, and empty notes. Replace these fields with actual observations. Empty notes deliberately fail outcome validation; the draft is not recorded evidence or consent confirmation.
+
 Record your choice in a separate validated revision instead of manually synchronizing the selected ID and action:
 
 ```sh

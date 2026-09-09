@@ -179,6 +179,14 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def observation_draft(plan: dict) -> dict:
+    move = selected_move(plan)
+    return {"contract_version": "unconventional-moves/outcome-v0.1",
+            "plan_sha256": plan_digest(plan), "move_id": move["id"],
+            "observed_value": None, "elapsed_hours": 0, "active_minutes": 0,
+            "stop_triggered": False, "consent_confirmed": False, "notes": ""}
+
+
 def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     selected_move(plan)
     if move_id not in {move["id"] for move in plan["moves"]}:
@@ -205,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
     select.add_argument("--reason", required=True)
     select.add_argument("--first-step", required=True)
     select.add_argument("--output", type=Path, required=True)
+    draft = commands.add_parser("observation-draft", help="Prepare an unfilled observation bound to this revision")
+    draft.add_argument("plan", type=Path)
+    draft.add_argument("--output", type=Path, required=True)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -227,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "observation-draft":
+            emit(json.dumps(observation_draft(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "select":
             result = select_plan(read_plan(args.plan), args.move_id, args.reason, args.first_step)
             emit(json.dumps(result, indent=2) + "\n", args.output)

@@ -212,6 +212,20 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_observation_draft_requires_completion_and_matches_selection(self):
+        from moves import observation_draft, evaluate_outcome, select_plan
+        plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")
+        draft = observation_draft(plan)
+        self.assertEqual(draft["move_id"], "move-02")
+        self.assertIsNone(draft["observed_value"])
+        self.assertFalse(draft["consent_confirmed"])
+        with self.assertRaisesRegex(ValueError, "notes"):
+            evaluate_outcome(plan, draft)
+        draft["notes"] = "No measurement is available yet."
+        self.assertIsNone(evaluate_outcome(plan, draft)["target_met"])
+        with self.assertRaises(ValueError):
+            evaluate_outcome(bounded_example(), draft)
+
     def test_selection_records_reason_without_mutating_input(self):
         from moves import select_plan, plan_digest
         plan = bounded_example()
