@@ -9,7 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scripts.package import MAX_VERSION_LENGTH, version_for  # noqa: E402  (sys.path adjusted above)
+from scripts.package import (
+    MAX_VERSION_LENGTH,
+    version_for,
+)
+
 MAX_LENGTH_VERSION = f"1.{'9' * 60}.3"
 OVERLONG_VERSION = f"1.{'9' * 61}.3"
 

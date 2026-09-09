@@ -7,11 +7,9 @@ import argparse
 import hashlib
 import json
 import re
-from pathlib import Path
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
-
 
 VERSION_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 # Keep the version-derived archive name comfortably below common 255-byte
@@ -21,7 +19,7 @@ MAX_VERSION_LENGTH = 64
 
 def version_for(root: Path) -> str:
     raw = (root / "VERSION").read_text(encoding="utf-8")
-    version = raw[:-1] if raw.endswith("\n") else raw
+    version = raw.removesuffix("\n")
     if len(version) > MAX_VERSION_LENGTH or VERSION_PATTERN.fullmatch(version) is None:
         raise ValueError(
             f"VERSION must contain a semantic X.Y.Z version of at most {MAX_VERSION_LENGTH} characters"
