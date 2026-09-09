@@ -69,10 +69,23 @@ def _reject_constant(value: str) -> None:
 
 
 def load_plan_json(raw: str) -> object:
+    if not isinstance(raw, str):
+        raise ValueError("JSON input must be text")
+    if len(raw.encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError(f"plan exceeds {MAX_PLAN_BYTES} bytes")
     try:
         return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
     except RecursionError as exc:
         raise ValueError("JSON nesting is too deep") from exc
+
+
+def read_json_file(path: Path) -> object:
+    """Bound the read itself, including files that grow after opening."""
+    with path.open("rb") as handle:
+        raw = handle.read(MAX_PLAN_BYTES + 1)
+    if len(raw) > MAX_PLAN_BYTES:
+        raise ValueError(f"plan exceeds {MAX_PLAN_BYTES} bytes")
+    return load_plan_json(raw.decode("utf-8"))
 
 
 def validate_plan_data(data: object, raw: str = "") -> list[str]:
@@ -145,24 +158,20 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plan", type=Path)
+    parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()
     try:
-        raw_bytes = args.plan.read_bytes()
-        if len(raw_bytes) > MAX_PLAN_BYTES:
-            print(f"FAIL plan exceeds {MAX_PLAN_BYTES} bytes")
-            return 1
-        raw = raw_bytes.decode("utf-8")
-        data = load_plan_json(raw)
+        data = read_json_file(args.plan)
+        failures = validate_plan_data(data)
     except OSError:
-        print("FAIL plan file cannot be read")
-        return 1
+        failures = ["plan file cannot be read"]
     except UnicodeDecodeError:
-        print("FAIL plan must be UTF-8 JSON")
-        return 1
-    except (json.JSONDecodeError, ValueError) as exc:
-        print(f"FAIL invalid JSON: {exc}")
-        return 1
-    failures = validate_plan_data(data, raw)
+        failures = ["plan must be UTF-8 JSON"]
+    except ValueError as exc:
+        failures = [str(exc) if str(exc) == "JSON object contains a duplicate key" else "invalid JSON or input exceeds supported bounds"]
+    if args.as_json:
+        print(json.dumps({"ok": not failures, "failures": failures}, sort_keys=True))
+        return int(bool(failures))
     if failures:
         for failure in failures:
             print(f"FAIL {failure}")
