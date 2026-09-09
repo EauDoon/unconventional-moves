@@ -47,6 +47,15 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Create and check a self-contained reviewer handoff:
+
+```sh
+python scripts/moves.py handoff draft.json --observation observation.json --output handoff.json
+python scripts/moves.py verify-handoff handoff.json
+```
+
+Omit `--observation` for a plan-only handoff. The bundle contains the full plan, its digest, review/card, and optional raw observation plus recomputed outcome review. Verification validates the plan and observation and recomputes every derived field. It detects accidental or partial tampering, not authorship or an attacker who rewrites a consistent unsigned bundle. All human checks remain pending. The actual formatted bundle must fit the same 1 MB JSON input bound, allowing a write/read roundtrip. Output files are never overwritten.
+
 Export a focused printable card with all declared experiment bounds, rollback, stop condition, digest, and unchecked human review checklist:
 
 ```sh

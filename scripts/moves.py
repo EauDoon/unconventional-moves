@@ -14,9 +14,9 @@ from decimal import Decimal, localcontext
 from datetime import date
 
 try:
-    from .validate_plan import read_json_file, validate_plan_data
+    from .validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
 except ImportError:
-    from validate_plan import read_json_file, validate_plan_data
+    from validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -225,6 +225,29 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def handoff_bundle(plan: dict, observation: object = None) -> dict:
+    bundle = {"contract_version": "unconventional-moves/handoff-v0.1", "plan": plan,
+              "plan_sha256": plan_digest(plan), "card": experiment_card(plan), "review": review_plan(plan),
+              "observation": observation, "outcome_review": None if observation is None else evaluate_outcome(plan, observation)}
+    if len((json.dumps(bundle, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("handoff exceeds the supported JSON byte limit")
+    return bundle
+
+
+def verify_handoff(bundle: object) -> dict:
+    fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observation", "outcome_review"}
+    if not isinstance(bundle, dict) or set(bundle) != fields or bundle["contract_version"] != "unconventional-moves/handoff-v0.1":
+        raise ValueError("unsupported handoff structure")
+    if validate_plan_data(bundle["plan"]):
+        raise ValueError("handoff contains an invalid plan")
+    expected = handoff_bundle(bundle["plan"], bundle["observation"])
+    if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+        raise ValueError("handoff digest or derived review does not match its contents")
+    return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
+            "observation_present": bundle["observation"] is not None, "human_review_required": True,
+            "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
+
+
 def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
     selected_move(plan)
     if type(max_minutes) is not int or not 1 <= max_minutes <= 2880:
@@ -349,6 +372,13 @@ def main(argv: list[str] | None = None) -> int:
     screen.add_argument("--max-minutes", type=int, required=True)
     screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
     screen.add_argument("--output", type=Path)
+    handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
+    handoff.add_argument("plan", type=Path)
+    handoff.add_argument("--observation", type=Path)
+    handoff.add_argument("--output", type=Path, required=True)
+    verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
+    verify.add_argument("bundle", type=Path)
+    verify.add_argument("--output", type=Path)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -372,6 +402,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "handoff":
+            result = handoff_bundle(read_plan(args.plan), read_json_file(args.observation) if args.observation else None)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "verify-handoff":
+            emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
         elif args.command == "screen":
             result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure)
             emit(json.dumps(result, indent=2) + "\n", args.output)

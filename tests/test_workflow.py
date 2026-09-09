@@ -212,6 +212,24 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_portable_handoff_recomputes_every_claim_and_caps_actual_bytes(self):
+        from moves import handoff_bundle, verify_handoff
+        plan = bounded_example()
+        bundle = handoff_bundle(plan, OutcomeTests().observation(plan))
+        self.assertTrue(verify_handoff(json.loads(json.dumps(bundle)))["consistent"])
+        for section, field, value in (("plan", "goal", "Changed goal"), ("card", "state", "approved"),
+                                     ("review", "review_complete", True), ("outcome_review", "target_met", 1)):
+            bad = copy.deepcopy(bundle)
+            bad[section][field] = value
+            with self.assertRaises(ValueError):
+                verify_handoff(bad)
+        for invalid in (None, [], {**bundle, "extra": True}):
+            with self.assertRaises(ValueError):
+                verify_handoff(invalid)
+        plan["goal"] = "x" * (MAX_PLAN_BYTES // 2)
+        with self.assertRaisesRegex(ValueError, "byte limit"):
+            handoff_bundle(plan)
+
     def test_printable_card_contains_all_bounds_and_escapes_authored_content(self):
         from moves import render_card, plan_digest
         plan = bounded_example()
