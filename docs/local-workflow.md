@@ -47,6 +47,14 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Record your choice in a separate validated revision instead of manually synchronizing the selected ID and action:
+
+```sh
+python scripts/moves.py select draft.json --move-id move-02 --reason "Fits available practice time" --first-step "Review the private practice setup" --output revised.json
+```
+
+Selection never ranks or starts a move. It requires a human reason and first step, preserves the input, and changes the plan digest. Create a fresh card and observations for that revision.
+
 ```sh
 python scripts/moves.py compare draft.json revised.json --output changes.json
 ```

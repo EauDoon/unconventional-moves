@@ -179,11 +179,32 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
+    selected_move(plan)
+    if move_id not in {move["id"] for move in plan["moves"]}:
+        raise ValueError("move ID must identify an existing move")
+    if not reason.strip() or not first_step.strip():
+        raise ValueError("selection reason and first step must be non-empty")
+    revised = json.loads(json.dumps(plan))
+    revised["selected_move_id"] = move_id
+    revised["prioritized_action"] = f"Selected {move_id}. Reason: {reason.strip()} First step: {first_step.strip()}"
+    failures = validate_plan_data(revised)
+    if failures:
+        raise ValueError("; ".join(failures))
+    return revised
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
+    select = commands.add_parser("select", help="Record a human choice and first step in a new revision")
+    select.add_argument("plan", type=Path)
+    select.add_argument("--move-id", required=True)
+    select.add_argument("--reason", required=True)
+    select.add_argument("--first-step", required=True)
+    select.add_argument("--output", type=Path, required=True)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -206,6 +227,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "select":
+            result = select_plan(read_plan(args.plan), args.move_id, args.reason, args.first_step)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "review":
             emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "render":

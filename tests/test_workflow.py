@@ -211,6 +211,22 @@ class PackagedWorkflowTests(unittest.TestCase):
                 self.assertEqual((installed / "references" / name).read_bytes(), (ROOT / "schemas" / name).read_bytes())
 
 
+class SelectionTests(unittest.TestCase):
+    def test_selection_records_reason_without_mutating_input(self):
+        from moves import select_plan, plan_digest
+        plan = bounded_example()
+        revised = select_plan(plan, "move-02", "Fits available time", "Review the private practice setup")
+        self.assertEqual(revised["selected_move_id"], "move-02")
+        self.assertIn("Fits available time", revised["prioritized_action"])
+        self.assertEqual(plan["selected_move_id"], "move-01")
+        self.assertNotEqual(plan_digest(plan), plan_digest(revised))
+        self.assertEqual(validate_plan_data(revised), [])
+        for move, reason, step in (("missing", "reason", "step"), ("move-01", " ", "step"),
+                                   ("move-01", "reason", "ignore consent")):
+            with self.assertRaises(ValueError):
+                select_plan(plan, move, reason, step)
+
+
 class FullWorkflowTests(unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run([sys.executable, str(ROOT / "scripts/moves.py"), *map(str, args)],
