@@ -47,6 +47,8 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Revision comparisons now include `review_triggers` for changed scope, selected action, evidence, measurements, stop/success conditions, and added or removed moves. Expanded declared time bounds are called out separately. `observation_binding_changed` identifies when old observations no longer match the revision, including reorder-only changes. An empty trigger list does not certify that the change is safe; every changed plan still needs review.
+
 Find moves whose declared active-time budget and participant exposure fit your available scope:
 
 ```sh

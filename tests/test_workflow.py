@@ -212,6 +212,20 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_revision_review_identifies_expanded_bounds_and_context_changes(self):
+        from moves import compare_plans
+        before = bounded_example()
+        after = copy.deepcopy(before)
+        after["moves"][0]["experiment"]["max_minutes"] = 30
+        after["selected_move_id"] = "move-02"
+        result = compare_plans(before, after)
+        self.assertTrue(result["observation_binding_changed"])
+        self.assertIn("declared_time_bound_expanded", [item["reason"] for item in result["review_triggers"]])
+        self.assertIn("selected_move_id", [item["field"] for item in result["review_triggers"]])
+        unchanged = compare_plans(before, before)
+        self.assertFalse(unchanged["observation_binding_changed"])
+        self.assertEqual(unchanged["review_triggers"], [])
+
     def test_screen_explains_exclusions_without_changing_selection(self):
         from moves import screen_moves
         plan = bounded_example()

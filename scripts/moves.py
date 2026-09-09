@@ -189,9 +189,24 @@ def compare_plans(before: dict, after: dict) -> dict:
             changed.append({"move_id": move_id, "changes": fields})
     metadata = [{"field": field, "before": before.get(field), "after": after.get(field)}
                 for field in sorted((before.keys() | after.keys()) - {"moves"}) if before.get(field) != after.get(field)]
+    triggers = []
+    for item in metadata:
+        if item["field"] in {"selected_move_id", "high_stakes", "sources", "goal", "prioritized_action", "contract_version"}:
+            triggers.append({"move_id": None, "field": item["field"], "reason": "review_context_changed"})
+    for move in changed:
+        for item in move["changes"]:
+            field = item["field"]
+            if field.startswith("experiment.") or field in {"concrete_move", "bounds", "stop_condition", "success_signal", "evidence_status"}:
+                reason = "experiment_or_review_condition_changed"
+                if field in {"experiment.max_minutes", "experiment.duration_hours", "experiment.start_within_hours"} and item["after"] > item["before"]:
+                    reason = "declared_time_bound_expanded"
+                triggers.append({"move_id": move["move_id"], "field": field, "reason": reason})
+    for move_id in sorted(old.keys() ^ new.keys()):
+        triggers.append({"move_id": move_id, "field": "move", "reason": "move_added_or_removed"})
     return {"before_sha256": plan_digest(before), "after_sha256": plan_digest(after),
             "added_move_ids": sorted(new.keys() - old.keys()), "removed_move_ids": sorted(old.keys() - new.keys()),
             "move_order_changed": list(old) != list(new), "changed_moves": changed, "metadata_changes": metadata,
+            "review_triggers": triggers, "observation_binding_changed": plan_digest(before) != plan_digest(after),
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
