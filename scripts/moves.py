@@ -6,6 +6,7 @@ import argparse
 import html
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -110,6 +111,50 @@ def experiment_card(plan: dict) -> dict:
             "limitation": "This card grants no authority and does not start, schedule, or execute a test."}
 
 
+OUTCOME_FIELDS = {"contract_version", "plan_sha256", "move_id", "observed_value", "elapsed_hours", "active_minutes", "stop_triggered", "consent_confirmed", "notes"}
+
+
+def evaluate_outcome(plan: dict, outcome: object) -> dict:
+    move = selected_move(plan)
+    if not isinstance(outcome, dict) or set(outcome) != OUTCOME_FIELDS:
+        raise ValueError("outcome must contain exactly the documented fields")
+    if outcome["contract_version"] != "unconventional-moves/outcome-v0.1":
+        raise ValueError("unsupported outcome contract")
+    if outcome["plan_sha256"] != plan_digest(plan) or outcome["move_id"] != move["id"]:
+        raise ValueError("outcome does not match the current plan revision and selected move")
+    for field in ("observed_value", "elapsed_hours", "active_minutes"):
+        value = outcome[field]
+        if value is None and field == "observed_value":
+            continue
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError(f"outcome {field} must be finite numeric data")
+        if field != "observed_value" and not 0 <= value <= 1_000_000:
+            raise ValueError(f"outcome {field} must be between zero and one million")
+    for field in ("stop_triggered", "consent_confirmed"):
+        if type(outcome[field]) is not bool:
+            raise ValueError(f"outcome {field} must be boolean")
+    if not isinstance(outcome["notes"], str) or not outcome["notes"].strip():
+        raise ValueError("outcome notes must describe the observation and limitations")
+    if outcome["active_minutes"] > outcome["elapsed_hours"] * 60:
+        raise ValueError("outcome active minutes cannot exceed elapsed time")
+    experiment = move["experiment"]
+    reasons = []
+    if outcome["stop_triggered"]:
+        reasons.append("declared_stop_condition_triggered")
+    if outcome["active_minutes"] >= experiment["max_minutes"]:
+        reasons.append("active_time_limit_reached")
+    if outcome["elapsed_hours"] >= experiment["duration_hours"]:
+        reasons.append("experiment_window_ended")
+    if experiment["exposure"] == "consenting_participants" and not outcome["consent_confirmed"]:
+        reasons.append("consent_not_confirmed")
+    observed = outcome["observed_value"]
+    target_met = None if observed is None else (observed >= experiment["target"] if experiment["direction"] == "increase" else observed <= experiment["target"])
+    return {"plan_sha256": plan_digest(plan), "move_id": move["id"], "target_met": target_met,
+            "decision": "stop_and_review" if reasons else "review_observation", "reasons": reasons,
+            "source_verification_required": plan["high_stakes"],
+            "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -124,6 +169,10 @@ def main(argv: list[str] | None = None) -> int:
     card = commands.add_parser("card", help="Prepare a review-only card for the selected move")
     card.add_argument("plan", type=Path)
     card.add_argument("--output", type=Path)
+    outcome = commands.add_parser("outcome", help="Compare reported observations with declared bounds")
+    outcome.add_argument("plan", type=Path)
+    outcome.add_argument("observation", type=Path)
+    outcome.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -135,6 +184,9 @@ def main(argv: list[str] | None = None) -> int:
             emit(render_plan(read_plan(args.plan)), args.output)
         elif args.command == "card":
             emit(json.dumps(experiment_card(read_plan(args.plan)), indent=2) + "\n", args.output)
+        elif args.command == "outcome":
+            result = evaluate_outcome(read_plan(args.plan), read_json_file(args.observation))
+            emit(json.dumps(result, indent=2) + "\n", args.output)
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)
         return 1

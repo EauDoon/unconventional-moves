@@ -120,3 +120,43 @@ class CardTests(unittest.TestCase):
         self.assertNotEqual(card["plan_sha256"], plan_digest(plan))
         with self.assertRaises(ValueError):
             experiment_card(example())
+
+
+class OutcomeTests(unittest.TestCase):
+    def observation(self, plan):
+        from moves import plan_digest
+        return {"contract_version": "unconventional-moves/outcome-v0.1", "plan_sha256": plan_digest(plan),
+            "move_id": "move-01", "observed_value": 2, "elapsed_hours": 24, "active_minutes": 10,
+            "stop_triggered": False, "consent_confirmed": False, "notes": "Synthetic measurement only."}
+
+    def test_stop_wins_over_target_and_missing_data_is_unknown(self):
+        from moves import evaluate_outcome
+        plan = bounded_example()
+        outcome = self.observation(plan)
+        outcome["stop_triggered"] = True
+        result = evaluate_outcome(plan, outcome)
+        self.assertTrue(result["target_met"])
+        self.assertEqual(result["decision"], "stop_and_review")
+        outcome["observed_value"] = None
+        self.assertIsNone(evaluate_outcome(plan, outcome)["target_met"])
+
+    def test_rejects_tampering_types_and_impossible_time(self):
+        from moves import evaluate_outcome
+        plan = bounded_example()
+        for field, value in (("move_id", "move-02"), ("plan_sha256", "wrong"), ("active_minutes", True),
+                             ("elapsed_hours", -1), ("observed_value", float("inf")), ("notes", ""),
+                             ("consent_confirmed", 1), ("active_minutes", 2000)):
+            outcome = self.observation(plan)
+            outcome[field] = value
+            with self.assertRaises(ValueError, msg=field):
+                evaluate_outcome(plan, outcome)
+
+    def test_limits_and_consent_are_stop_conditions(self):
+        from moves import evaluate_outcome
+        plan = bounded_example()
+        plan["moves"][0]["experiment"]["exposure"] = "consenting_participants"
+        outcome = self.observation(plan)
+        outcome["active_minutes"] = 20
+        outcome["elapsed_hours"] = 48
+        result = evaluate_outcome(plan, outcome)
+        self.assertEqual(len(result["reasons"]), 3)

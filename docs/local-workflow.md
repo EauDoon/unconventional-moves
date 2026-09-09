@@ -34,3 +34,13 @@ python scripts/moves.py card draft.json --output card.json
 ```
 
 Version 0.2 cards copy the single selected move, its metric, time bounds, success signal, stop condition, and rollback. They always start in `human_review_required`. A canonical SHA-256 of the plan binds later observations to that exact revision. This is a consistency check, not proof of authorship or an immutable record. Review consent, authority, sources, and actual baseline before starting any test yourself.
+
+## Review reported observations
+
+```sh
+python scripts/moves.py outcome draft.json observation.json --output outcome-review.json
+```
+
+Use the [outcome schema](../schemas/outcome.schema.json). Copy `plan_sha256` and `move_id` from the card, report elapsed hours, active minutes, observed metric value (or `null` when unavailable), whether the stop condition triggered, actual consent status, and honest notes. Never invent a measurement to complete a field.
+
+The result separately reports whether the declared numeric target was met. A triggered stop, reached time bound, or missing required consent produces `stop_and_review` even if the target was met. Otherwise the result is `review_observation`, never automatic continuation. Numeric target attainment does not prove causation or satisfy every qualitative success signal. Changed plan revisions and selected moves are rejected. High-stakes source review remains required.

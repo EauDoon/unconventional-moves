@@ -16,6 +16,7 @@
   "package-manifest.json",
   "schemas/moves-v0.2.schema.json",
   "schemas/moves.schema.json",
+  "schemas/outcome.schema.json",
   "scripts/moves.py",
   "scripts/package.py",
   "scripts/validate.py",
