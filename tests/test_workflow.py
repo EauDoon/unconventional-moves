@@ -212,6 +212,21 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_timeline_preserves_stops_and_rejects_reset_or_mixed_checkpoints(self):
+        from moves import review_timeline
+        plan = bounded_example()
+        first = OutcomeTests().observation(plan)
+        first.update(elapsed_hours=1, active_minutes=2, stop_triggered=True)
+        second = {**first, "elapsed_hours": 2, "active_minutes": 3, "stop_triggered": False}
+        result = review_timeline(plan, [first, second])
+        self.assertEqual(result["first_stop_checkpoint"], 1)
+        self.assertTrue(result["observations_after_stop"])
+        self.assertEqual(result["decision"], "stop_and_review")
+        for records in ([], [first]*101, [first, first], [second, first],
+                        [first, {**second, "active_minutes": 1}], [first, {**second, "move_id": "move-02"}]):
+            with self.assertRaises(ValueError):
+                review_timeline(plan, records)
+
     def test_measurement_context_handles_direction_missing_and_extreme_values(self):
         from moves import evaluate_outcome
         plan = bounded_example()

@@ -194,6 +194,29 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def review_timeline(plan: dict, observations: object) -> dict:
+    if not isinstance(observations, list) or not 1 <= len(observations) <= 100:
+        raise ValueError("timeline requires 1 to 100 cumulative observations")
+    checkpoints, stop_reasons = [], set()
+    previous_hours, previous_minutes, first_stop = -1, -1, None
+    for index, observation in enumerate(observations, 1):
+        review = evaluate_outcome(plan, observation)
+        hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
+        if hours <= previous_hours or minutes < previous_minutes:
+            raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
+        stop_reasons.update(review["reasons"])
+        if stop_reasons and first_stop is None:
+            first_stop = index
+        checkpoints.append({"checkpoint": index, "elapsed_hours": hours, "active_minutes": minutes,
+                            "review": review, "after_stop": first_stop is not None and index > first_stop})
+        previous_hours, previous_minutes = hours, minutes
+    return {"plan_sha256": plan_digest(plan), "move_id": selected_move(plan)["id"],
+            "checkpoints": checkpoints, "first_stop_checkpoint": first_stop,
+            "decision": "stop_and_review" if stop_reasons else "review_observations",
+            "reasons": sorted(stop_reasons), "observations_after_stop": first_stop is not None and first_stop < len(observations),
+            "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
+
+
 def observation_draft(plan: dict) -> dict:
     move = selected_move(plan)
     return {"contract_version": "unconventional-moves/outcome-v0.1",
@@ -231,6 +254,10 @@ def main(argv: list[str] | None = None) -> int:
     draft = commands.add_parser("observation-draft", help="Prepare an unfilled observation bound to this revision")
     draft.add_argument("plan", type=Path)
     draft.add_argument("--output", type=Path, required=True)
+    timeline = commands.add_parser("timeline", help="Review cumulative checkpoints with persistent stop conditions")
+    timeline.add_argument("plan", type=Path)
+    timeline.add_argument("observations", type=Path)
+    timeline.add_argument("--output", type=Path)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -253,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "timeline":
+            result = review_timeline(read_plan(args.plan), read_json_file(args.observations))
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "observation-draft":
             emit(json.dumps(observation_draft(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "select":
