@@ -44,3 +44,11 @@ python scripts/moves.py outcome draft.json observation.json --output outcome-rev
 Use the [outcome schema](../schemas/outcome.schema.json). Copy `plan_sha256` and `move_id` from the card, report elapsed hours, active minutes, observed metric value (or `null` when unavailable), whether the stop condition triggered, actual consent status, and honest notes. Never invent a measurement to complete a field.
 
 The result separately reports whether the declared numeric target was met. A triggered stop, reached time bound, or missing required consent produces `stop_and_review` even if the target was met. Otherwise the result is `review_observation`, never automatic continuation. Numeric target attainment does not prove causation or satisfy every qualitative success signal. Changed plan revisions and selected moves are rejected. High-stakes source review remains required.
+
+## Compare revisions before a new trial
+
+```sh
+python scripts/moves.py compare draft.json revised.json --output changes.json
+```
+
+The report matches moves by ID, distinguishes reordering from content changes, and shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.

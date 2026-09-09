@@ -155,6 +155,30 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
 
 
+def compare_plans(before: dict, after: dict) -> dict:
+    old = {move["id"]: move for move in before["moves"]}
+    new = {move["id"]: move for move in after["moves"]}
+    changed = []
+    for move_id in sorted(old.keys() & new.keys()):
+        fields = []
+        for field in sorted(old[move_id].keys() | new[move_id].keys()):
+            left, right = old[move_id].get(field), new[move_id].get(field)
+            if left != right:
+                if field == "experiment" and isinstance(left, dict) and isinstance(right, dict):
+                    fields.extend({"field": "experiment." + key, "before": left.get(key), "after": right.get(key)}
+                                  for key in sorted(left.keys() | right.keys()) if left.get(key) != right.get(key))
+                else:
+                    fields.append({"field": field, "before": left, "after": right})
+        if fields:
+            changed.append({"move_id": move_id, "changes": fields})
+    metadata = [{"field": field, "before": before.get(field), "after": after.get(field)}
+                for field in sorted((before.keys() | after.keys()) - {"moves"}) if before.get(field) != after.get(field)]
+    return {"before_sha256": plan_digest(before), "after_sha256": plan_digest(after),
+            "added_move_ids": sorted(new.keys() - old.keys()), "removed_move_ids": sorted(old.keys() - new.keys()),
+            "move_order_changed": list(old) != list(new), "changed_moves": changed, "metadata_changes": metadata,
+            "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -173,6 +197,10 @@ def main(argv: list[str] | None = None) -> int:
     outcome.add_argument("plan", type=Path)
     outcome.add_argument("observation", type=Path)
     outcome.add_argument("--output", type=Path)
+    compare = commands.add_parser("compare", help="Compare plan revisions using stable move IDs")
+    compare.add_argument("before", type=Path)
+    compare.add_argument("after", type=Path)
+    compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -186,6 +214,9 @@ def main(argv: list[str] | None = None) -> int:
             emit(json.dumps(experiment_card(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "outcome":
             result = evaluate_outcome(read_plan(args.plan), read_json_file(args.observation))
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "compare":
+            result = compare_plans(read_plan(args.before), read_plan(args.after))
             emit(json.dumps(result, indent=2) + "\n", args.output)
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)

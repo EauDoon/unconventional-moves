@@ -160,3 +160,22 @@ class OutcomeTests(unittest.TestCase):
         outcome["elapsed_hours"] = 48
         result = evaluate_outcome(plan, outcome)
         self.assertEqual(len(result["reasons"]), 3)
+
+
+class ComparisonTests(unittest.TestCase):
+    def test_reordering_and_bound_changes_have_distinct_diagnostics(self):
+        from moves import compare_plans
+        before = bounded_example()
+        after = copy.deepcopy(before)
+        after["moves"].reverse()
+        result = compare_plans(before, after)
+        self.assertTrue(result["move_order_changed"])
+        self.assertEqual(result["changed_moves"], [])
+        after["moves"][-1]["experiment"]["max_minutes"] = 30
+        result = compare_plans(before, after)
+        self.assertEqual(result["changed_moves"][0]["changes"],
+                         [{"field": "experiment.max_minutes", "before": 20, "after": 30}])
+        after["moves"][0]["id"] = "new-move"
+        result = compare_plans(before, after)
+        self.assertEqual(result["added_move_ids"], ["new-move"])
+        self.assertEqual(result["removed_move_ids"], ["move-05"])
