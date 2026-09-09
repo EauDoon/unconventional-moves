@@ -269,6 +269,12 @@ class Checker:
             move_required = set(schema.get("properties", {}).get("moves", {}).get("items", {}).get("required", []))
             self.ok({"success_signal", "stop_condition"}.issubset(move_required), "schema requires success signal and stop condition")
 
+        for name in ("moves.schema.json", "moves-v0.2.schema.json"):
+            canonical = self.root / "schemas" / name
+            bundled = self.root / "skill/unconventional-moves/references" / name
+            self.ok(canonical.is_file() and bundled.is_file() and canonical.read_bytes() == bundled.read_bytes(),
+                    f"installed schema matches canonical: {name}")
+
         plan_path = self.root / "examples/example-plan.json"
         try:
             plan_raw = plan_path.read_text(encoding="utf-8")

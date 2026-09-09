@@ -8,6 +8,7 @@
   "SECURITY.md",
   "VERSION",
   "docs/experiment-contract.md",
+  "docs/local-workflow.md",
   "docs/release-notes-v0.1.0.md",
   "examples/adversarial-fixtures.json",
   "examples/bounded-plan.json",
@@ -23,5 +24,7 @@
   "scripts/validate_plan.py",
   "skill/unconventional-moves/SKILL.md",
   "skill/unconventional-moves/agents/openai.yaml",
+  "skill/unconventional-moves/references/moves-v0.2.schema.json",
+  "skill/unconventional-moves/references/moves.schema.json",
   "templates/worksheet.md"
 ]

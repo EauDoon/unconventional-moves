@@ -32,7 +32,7 @@ into the project where you want to use it:
 <project>/.agents/skills/unconventional-moves
 ```
 
-The installed directory should contain both `SKILL.md` and `agents/openai.yaml`. No external dependencies, executable code, or assets are required.
+The installed directory should contain `SKILL.md`, `agents/openai.yaml`, and the bundled `references/` schemas. No external dependencies, executable code, or assets are required.
 
 ### 2. Invoke it
 

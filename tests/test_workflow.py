@@ -179,3 +179,33 @@ class ComparisonTests(unittest.TestCase):
         result = compare_plans(before, after)
         self.assertEqual(result["added_move_ids"], ["new-move"])
         self.assertEqual(result["removed_move_ids"], ["move-05"])
+
+
+class PackagedWorkflowTests(unittest.TestCase):
+    def test_extracted_package_and_synthetic_install(self):
+        import hashlib
+        import shutil
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            output = temp / "dist"
+            built = subprocess.run([sys.executable, str(ROOT / "scripts/package.py"), "--output", str(output)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            archive = next(output.glob("*.zip"))
+            checksum = archive.with_suffix(".zip.sha256").read_text().split()[0]
+            self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(temp / "expanded")
+            extracted = next((temp / "expanded").iterdir())
+            for args in (["scripts/validate.py"], ["scripts/moves.py", "init", "--output", str(temp / "draft.json")],
+                         ["-m", "scripts.moves", "card", str(temp / "draft.json")]):
+                result = subprocess.run([sys.executable, *args], cwd=extracted, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            installed = temp / "synthetic-project" / ".agents" / "skills" / "unconventional-moves"
+            shutil.copytree(extracted / "skill/unconventional-moves", installed)
+            from validate import Checker
+            checker = Checker(installed)
+            checker.check_links()
+            self.assertEqual(checker.failures, [])
+            for name in ("moves.schema.json", "moves-v0.2.schema.json"):
+                self.assertEqual((installed / "references" / name).read_bytes(), (ROOT / "schemas" / name).read_bytes())

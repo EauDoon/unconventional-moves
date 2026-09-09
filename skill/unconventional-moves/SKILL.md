@@ -36,12 +36,9 @@ The `Prioritized action` line must occur exactly once and name one action.
 
 ## Machine-readable mode
 
-When JSON is requested, emit an object that follows
-[`schemas/moves.schema.json`](../../schemas/moves.schema.json). It must contain
-five to seven moves, a non-empty success signal and stop condition for each
-move, exactly one `prioritized_action` string, and a `sources` array. The
-dependency-light checker in `scripts/validate.py` validates the repository
-fixtures, while `scripts/validate_plan.py` validates a plan file.
+When JSON is requested, use the bundled [version 0.1 schema](references/moves.schema.json) for the original prose-based contract, or the [version 0.2 schema](references/moves-v0.2.schema.json) when the user wants measurable experiment cards. Both require five to seven moves, one prioritized action, and sources. Version 0.2 also requires one selected move ID and explicit numeric targets, time bounds, exposure, and rollback for each move. Declare unknown baselines as assumptions only when appropriate; do not invent measurements. If meaningful numbers cannot be supplied, keep version 0.1 and explain what needs measuring.
+
+The full repository package includes optional local authoring, review, rendering, comparison, and outcome tools. These are not required to invoke the installed skill. Treat their checks as structural support. Before a trial, verify actual consent, realistic bounds, evidence, and rollback. Afterward, distinguish observation from causation, stop when a bound or stop condition is reached, and request fresh authority for consequential expansion. A successful target does not authorize continuation.
 
 ## Handle high-stakes goals
 

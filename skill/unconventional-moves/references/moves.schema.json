@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oonyl.github.io/unconventional-moves/schemas/moves.schema.json",
+  "title": "Unconventional Moves plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "goal", "high_stakes", "moves", "prioritized_action", "sources"],
+  "properties": {
+    "contract_version": { "type": "string", "const": "unconventional-moves/v0.1" },
+    "goal": { "type": "string", "minLength": 1 },
+    "high_stakes": { "type": "boolean" },
+    "moves": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "mechanism", "concrete_move", "why_overlooked", "test_48h", "success_signal", "stop_condition", "evidence_status", "bounds"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "mechanism": { "type": "string", "minLength": 1 },
+          "concrete_move": { "type": "string", "minLength": 1 },
+          "why_overlooked": { "type": "string", "minLength": 1 },
+          "test_48h": { "type": "string", "minLength": 1 },
+          "success_signal": { "type": "string", "minLength": 1 },
+          "stop_condition": { "type": "string", "minLength": 1 },
+          "evidence_status": { "type": "string", "minLength": 1 },
+          "bounds": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "prioritized_action": { "type": "string", "minLength": 1 },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "url", "supports"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "publisher": { "type": "string" },
+          "date": { "type": "string" },
+          "url": { "type": "string", "pattern": "^https?://" },
+          "supports": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
