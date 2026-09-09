@@ -195,6 +195,29 @@ def compare_plans(before: dict, after: dict) -> dict:
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
 
+def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
+    selected_move(plan)
+    if type(max_minutes) is not int or not 1 <= max_minutes <= 2880:
+        raise ValueError("maximum active minutes must be an integer from 1 to 2880")
+    if exposure not in {"self_only", "consenting_participants"}:
+        raise ValueError("unsupported exposure ceiling")
+    fits, excluded = [], []
+    for move in plan["moves"]:
+        experiment, reasons = move["experiment"], []
+        if experiment["max_minutes"] > max_minutes:
+            reasons.append("active_time_exceeds_ceiling")
+        if exposure == "self_only" and experiment["exposure"] != "self_only":
+            reasons.append("participants_outside_ceiling")
+        if reasons:
+            excluded.append({"move_id": move["id"], "reasons": reasons})
+        else:
+            fits.append(move["id"])
+    return {"plan_sha256": plan_digest(plan), "max_minutes": max_minutes, "exposure_ceiling": exposure,
+            "matching_move_ids": fits, "excluded": excluded, "selected_move_id": plan["selected_move_id"],
+            "selected_within_constraints": plan["selected_move_id"] in fits,
+            "limitation": "Original order retained. Declared constraints only; no ranking, consent verification, safety certification, or automatic selection."}
+
+
 def iso_date(value: str) -> date:
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
         raise ValueError("date must use YYYY-MM-DD")
@@ -291,6 +314,11 @@ def main(argv: list[str] | None = None) -> int:
     sources.add_argument("--as-of", required=True)
     sources.add_argument("--max-age-days", type=int, required=True)
     sources.add_argument("--output", type=Path)
+    screen = commands.add_parser("screen", help="Shortlist declared bounds without ranking or selecting moves")
+    screen.add_argument("plan", type=Path)
+    screen.add_argument("--max-minutes", type=int, required=True)
+    screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
+    screen.add_argument("--output", type=Path)
     review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -313,6 +341,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "screen":
+            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
             result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
             emit(json.dumps(result, indent=2) + "\n", args.output)

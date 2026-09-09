@@ -212,6 +212,19 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_screen_explains_exclusions_without_changing_selection(self):
+        from moves import screen_moves
+        plan = bounded_example()
+        plan["moves"][0]["experiment"].update(max_minutes=21, exposure="consenting_participants")
+        result = screen_moves(plan, 20, "self_only")
+        self.assertEqual(result["matching_move_ids"], ["move-02", "move-03", "move-04", "move-05"])
+        self.assertEqual(len(result["excluded"][0]["reasons"]), 2)
+        self.assertFalse(result["selected_within_constraints"])
+        self.assertEqual(plan["selected_move_id"], "move-01")
+        self.assertTrue(screen_moves(plan, 21, "consenting_participants")["selected_within_constraints"])
+        with self.assertRaises(ValueError):
+            screen_moves(example(), 20, "self_only")
+
     def test_declared_dates_have_explicit_reference_and_never_claim_verification(self):
         from moves import audit_sources
         plan = bounded_example()

@@ -47,6 +47,14 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Find moves whose declared active-time budget and participant exposure fit your available scope:
+
+```sh
+python scripts/moves.py screen draft.json --max-minutes 20 --exposure self_only
+```
+
+The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to explicitly record a human choice after review.
+
 Audit declared source dates against a reference date and age threshold you choose:
 
 ```sh
