@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -88,15 +89,48 @@ def read_json_file(path: Path) -> object:
     return load_plan_json(raw.decode("utf-8"))
 
 
+EXPERIMENT_FIELDS = {"hypothesis", "metric", "baseline", "target", "direction", "start_within_hours", "duration_hours", "max_minutes", "exposure", "rollback"}
+
+
+def validate_experiment(value: object, label: str) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{label} experiment must be an object"]
+    failures = []
+    if set(value) != EXPERIMENT_FIELDS:
+        failures.append(f"{label} experiment must contain exactly the documented fields")
+    for field in ("hypothesis", "metric", "rollback"):
+        if not isinstance(value.get(field), str) or not value[field].strip():
+            failures.append(f"{label} experiment {field} must be non-empty text")
+    for field in ("baseline", "target"):
+        number = value.get(field)
+        if type(number) not in (int, float) or not math.isfinite(number):
+            failures.append(f"{label} experiment {field} must be a finite number")
+    for field, minimum, maximum in (("start_within_hours", 0, 48), ("duration_hours", 1, 48), ("max_minutes", 1, 2880)):
+        number = value.get(field)
+        if type(number) is not int or not minimum <= number <= maximum:
+            failures.append(f"{label} experiment {field} must be an integer from {minimum} to {maximum}")
+    if value.get("direction") not in ("increase", "decrease"):
+        failures.append(f"{label} experiment direction must be increase or decrease")
+    if value.get("exposure") not in ("self_only", "consenting_participants"):
+        failures.append(f"{label} experiment exposure must be self_only or consenting_participants")
+    if not failures:
+        if (value["target"] <= value["baseline"] if value["direction"] == "increase" else value["target"] >= value["baseline"]):
+            failures.append(f"{label} experiment target must improve on baseline in the stated direction")
+        if value["max_minutes"] > value["duration_hours"] * 60:
+            failures.append(f"{label} experiment max_minutes exceeds duration")
+    return failures
+
+
 def validate_plan_data(data: object, raw: str = "") -> list[str]:
     failures: list[str] = []
     if not isinstance(data, dict):
         return ["plan must be a JSON object"]
-    unknown_top = sorted(set(data) - TOP_LEVEL_FIELDS)
+    v2 = data.get("contract_version") == "unconventional-moves/v0.2"
+    unknown_top = sorted(set(data) - (TOP_LEVEL_FIELDS | ({"selected_move_id"} if v2 else set())))
     if unknown_top:
         failures.append(f"plan has unknown fields: {', '.join(unknown_top)}")
-    if data.get("contract_version") != "unconventional-moves/v0.1":
-        failures.append("contract_version must be unconventional-moves/v0.1")
+    if data.get("contract_version") not in ("unconventional-moves/v0.1", "unconventional-moves/v0.2"):
+        failures.append("contract_version must be unconventional-moves/v0.1 or unconventional-moves/v0.2")
     if not isinstance(data.get("goal"), str) or not data["goal"].strip():
         failures.append("goal must be a non-empty string")
     moves = data.get("moves")
@@ -108,12 +142,14 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         if not isinstance(move, dict):
             failures.append(f"move {index} must be an object")
             continue
-        unknown_move = sorted(set(move) - set(MOVE_FIELDS))
+        unknown_move = sorted(set(move) - (set(MOVE_FIELDS) | ({"experiment"} if v2 else set())))
         if unknown_move:
             failures.append(f"move {index} has unknown fields: {', '.join(unknown_move)}")
         missing = [field for field in MOVE_FIELDS if not isinstance(move.get(field), str) or not move[field].strip()]
         if missing:
             failures.append(f"move {index} missing non-empty fields: {', '.join(missing)}")
+        if v2:
+            failures.extend(validate_experiment(move.get("experiment"), f"move {index}"))
         move_id = move.get("id")
         if isinstance(move_id, str):
             ids.append(move_id)
@@ -123,6 +159,9 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
                 failures.append(f"move {index} contains an unsafe action in {field}")
     if len(ids) != len(set(ids)):
         failures.append("move IDs must be unique")
+
+    if v2 and (not isinstance(data.get("selected_move_id"), str) or data["selected_move_id"] not in ids):
+        failures.append("selected_move_id must identify exactly one existing move")
 
     prioritized = data.get("prioritized_action")
     if not isinstance(prioritized, str) or not prioritized.strip():

@@ -12,6 +12,7 @@
   "examples/example-plan.json",
   "examples/example-prompts.md",
   "package-manifest.json",
+  "schemas/moves-v0.2.schema.json",
   "schemas/moves.schema.json",
   "scripts/package.py",
   "scripts/validate.py",
