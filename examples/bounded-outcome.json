@@ -1,0 +1,11 @@
+{
+  "contract_version": "unconventional-moves/outcome-v0.1",
+  "plan_sha256": "47dbb88e90f86ff3722daee44f299176cffeab696a1937cf57257e66104863d1",
+  "move_id": "move-01",
+  "observed_value": 2,
+  "elapsed_hours": 48,
+  "active_minutes": 20,
+  "stop_triggered": false,
+  "consent_confirmed": false,
+  "notes": "Synthetic demonstration only. Two fictional starts met the target; the trial window and active-time budget ended. This is not observed evidence."
+}

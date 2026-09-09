@@ -32,7 +32,7 @@ into the project where you want to use it:
 <project>/.agents/skills/unconventional-moves
 ```
 
-The installed directory should contain both `SKILL.md` and `agents/openai.yaml`. No external dependencies, executable code, or assets are required.
+The installed directory should contain `SKILL.md`, `agents/openai.yaml`, and the bundled `references/` schemas. No external dependencies, executable code, or assets are required.
 
 ### 2. Invoke it
 
@@ -52,9 +52,9 @@ deterministic ZIP plus SHA-256 checksum:
 ```powershell
 python .\scripts\validate.py
 python .\scripts\package.py --output .\dist
-Get-FileHash .\dist\unconventional-moves-0.1.0.zip -Algorithm SHA256
-Expand-Archive .\dist\unconventional-moves-0.1.0.zip -DestinationPath .\dist\expanded
-Copy-Item .\dist\expanded\unconventional-moves-0.1.0\skill\unconventional-moves $env:CODEX_HOME\skills\unconventional-moves -Recurse -Force
+Get-FileHash .\dist\unconventional-moves-0.2.0.zip -Algorithm SHA256
+Expand-Archive .\dist\unconventional-moves-0.2.0.zip -DestinationPath .\dist\expanded
+Copy-Item .\dist\expanded\unconventional-moves-0.2.0\skill\unconventional-moves $env:CODEX_HOME\skills\unconventional-moves -Recurse -Force
 ```
 
 On Bash:
@@ -62,9 +62,9 @@ On Bash:
 ```bash
 python3 scripts/validate.py
 python3 scripts/package.py --output dist
-sha256sum dist/unconventional-moves-0.1.0.zip
-unzip -q dist/unconventional-moves-0.1.0.zip -d dist/expanded
-cp -R dist/expanded/unconventional-moves-0.1.0/skill/unconventional-moves "$CODEX_HOME/skills/unconventional-moves"
+sha256sum dist/unconventional-moves-0.2.0.zip
+unzip -q dist/unconventional-moves-0.2.0.zip -d dist/expanded
+cp -R dist/expanded/unconventional-moves-0.2.0/skill/unconventional-moves "$CODEX_HOME/skills/unconventional-moves"
 ```
 
 Verify the checksum before copying. The package does not publish or change
@@ -85,6 +85,23 @@ If one missing detail would materially change safety or usefulness, the skill ma
 For a copy-ready intake and planning worksheet, use
 [`templates/worksheet.md`](templates/worksheet.md). A JSON plan can be checked
 against [`schemas/moves.schema.json`](schemas/moves.schema.json).
+
+## Author, review, and learn locally
+
+The optional Python CLI adds a complete local workflow without model calls, accounts, or runtime dependencies. It supports both the original plan contract and an additive version 0.2 with measurable experiment bounds.
+
+```sh
+python scripts/moves.py init --output draft.json
+python scripts/moves.py review draft.json
+python scripts/moves.py render draft.json --output draft.md
+python scripts/moves.py card draft.json --output card.json
+python scripts/moves.py outcome draft.json examples/bounded-outcome.json
+python scripts/moves.py compare draft.json examples/bounded-plan.json
+```
+
+These commands replay a **synthetic language-practice example**. The outcome fixture matches the unchanged initial draft only. Editing a plan requires a new card and honest observations tied to that revision. The synthetic outcome meets its numeric target but returns `stop_and_review` because its bounds are reached. No command runs an experiment, establishes consent, or authorizes continuation.
+
+For editable drafts, observation fields, and interpretation, see the [local workflow](docs/local-workflow.md) and [experiment contract](docs/experiment-contract.md). The CLI accepts `--output` on each report command and refuses to overwrite files. Exit status 0 means the command produced its report, including reports that require stopping. Status 1 means invalid input or a file error; status 2 means invalid command arguments. Review warnings are editorial prompts, never proof of novelty, safety, or effectiveness.
 
 ## How the method works
 

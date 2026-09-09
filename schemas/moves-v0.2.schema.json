@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EauDoon/unconventional-moves/blob/main/schemas/moves-v0.2.schema.json",
+  "title": "Unconventional Moves bounded experiment plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "goal",
+    "high_stakes",
+    "moves",
+    "prioritized_action",
+    "sources",
+    "selected_move_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "unconventional-moves/v0.2"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "high_stakes": {
+      "type": "boolean"
+    },
+    "moves": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "mechanism",
+          "concrete_move",
+          "why_overlooked",
+          "test_48h",
+          "success_signal",
+          "stop_condition",
+          "evidence_status",
+          "bounds",
+          "experiment"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mechanism": {
+            "type": "string",
+            "minLength": 1
+          },
+          "concrete_move": {
+            "type": "string",
+            "minLength": 1
+          },
+          "why_overlooked": {
+            "type": "string",
+            "minLength": 1
+          },
+          "test_48h": {
+            "type": "string",
+            "minLength": 1
+          },
+          "success_signal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stop_condition": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bounds": {
+            "type": "string",
+            "minLength": 1
+          },
+          "experiment": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hypothesis",
+              "metric",
+              "rollback",
+              "baseline",
+              "target",
+              "start_within_hours",
+              "duration_hours",
+              "max_minutes",
+              "direction",
+              "exposure"
+            ],
+            "properties": {
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rollback": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseline": {
+                "type": "number"
+              },
+              "target": {
+                "type": "number"
+              },
+              "start_within_hours": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 48
+              },
+              "duration_hours": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 48
+              },
+              "max_minutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2880
+              },
+              "direction": {
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              "exposure": {
+                "enum": [
+                  "self_only",
+                  "consenting_participants"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "prioritized_action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "url",
+          "supports"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https?://"
+          },
+          "supports": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "selected_move_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
