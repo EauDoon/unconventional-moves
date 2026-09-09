@@ -26,3 +26,11 @@ python scripts/moves.py render draft.json --output draft.md
 ```
 
 The renderer includes all moves, bounds, evidence, sources, and exactly one prioritized action. User-supplied Markdown and HTML are escaped and line breaks inside values become spaces. It does not follow source URLs, embed remote content, or publish the report. Keep the JSON as the editable source.
+
+## Prepare the selected experiment
+
+```sh
+python scripts/moves.py card draft.json --output card.json
+```
+
+Version 0.2 cards copy the single selected move, its metric, time bounds, success signal, stop condition, and rollback. They always start in `human_review_required`. A canonical SHA-256 of the plan binds later observations to that exact revision. This is a consistency check, not proof of authorship or an immutable record. Review consent, authority, sources, and actual baseline before starting any test yourself.

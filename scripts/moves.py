@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import hashlib
 import json
 import re
 import sys
@@ -87,6 +88,28 @@ def render_plan(plan: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def plan_digest(plan: dict) -> str:
+    return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("utf-8")).hexdigest()
+
+
+def selected_move(plan: dict) -> dict:
+    if plan["contract_version"] != "unconventional-moves/v0.2":
+        raise ValueError("experiment workflow requires a version 0.2 plan")
+    return next(move for move in plan["moves"] if move["id"] == plan["selected_move_id"])
+
+
+def experiment_card(plan: dict) -> dict:
+    move = selected_move(plan)
+    return {"contract_version": "unconventional-moves/card-v0.1", "plan_sha256": plan_digest(plan),
+            "state": "human_review_required", "goal": plan["goal"], "move_id": move["id"],
+            "concrete_move": move["concrete_move"], "success_signal": move["success_signal"],
+            "stop_condition": move["stop_condition"], "experiment": move["experiment"],
+            "high_stakes": plan["high_stakes"],
+            "review_before_start": ["Confirm actual consent and authority.", "Verify baseline and measurement method.",
+                                    "Check current sources when high stakes.", "Confirm rollback and downside limits."],
+            "limitation": "This card grants no authority and does not start, schedule, or execute a test."}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -98,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
     render = commands.add_parser("render", help="Render a validated plan as inert Markdown")
     render.add_argument("plan", type=Path)
     render.add_argument("--output", type=Path)
+    card = commands.add_parser("card", help="Prepare a review-only card for the selected move")
+    card.add_argument("plan", type=Path)
+    card.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -107,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
             emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "render":
             emit(render_plan(read_plan(args.plan)), args.output)
+        elif args.command == "card":
+            emit(json.dumps(experiment_card(read_plan(args.plan)), indent=2) + "\n", args.output)
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)
         return 1

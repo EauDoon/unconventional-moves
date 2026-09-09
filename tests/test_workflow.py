@@ -106,3 +106,17 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(result.count("**Prioritized action:**"), 1)
         self.assertEqual(result.count("**Concrete move:**"), 5)
         self.assertIn("**Experiment rollback:**", result)
+
+
+class CardTests(unittest.TestCase):
+    def test_selected_move_and_revision_binding(self):
+        from moves import experiment_card, plan_digest
+        plan = bounded_example()
+        card = experiment_card(plan)
+        self.assertEqual(card["move_id"], "move-01")
+        self.assertEqual(card["state"], "human_review_required")
+        self.assertEqual(card["plan_sha256"], plan_digest(dict(reversed(list(plan.items())))))
+        plan["goal"] += " Changed."
+        self.assertNotEqual(card["plan_sha256"], plan_digest(plan))
+        with self.assertRaises(ValueError):
+            experiment_card(example())
