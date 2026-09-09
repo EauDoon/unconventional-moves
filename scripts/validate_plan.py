@@ -103,7 +103,7 @@ def validate_experiment(value: object, label: str) -> list[str]:
             failures.append(f"{label} experiment {field} must be non-empty text")
     for field in ("baseline", "target"):
         number = value.get(field)
-        if type(number) not in (int, float) or not math.isfinite(number):
+        if type(number) not in (int, float) or (type(number) is float and not math.isfinite(number)):
             failures.append(f"{label} experiment {field} must be a finite number")
     for field, minimum, maximum in (("start_within_hours", 0, 48), ("duration_hours", 1, 48), ("max_minutes", 1, 2880)):
         number = value.get(field)

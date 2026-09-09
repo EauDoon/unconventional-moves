@@ -209,3 +209,59 @@ class PackagedWorkflowTests(unittest.TestCase):
             self.assertEqual(checker.failures, [])
             for name in ("moves.schema.json", "moves-v0.2.schema.json"):
                 self.assertEqual((installed / "references" / name).read_bytes(), (ROOT / "schemas" / name).read_bytes())
+
+
+class FullWorkflowTests(unittest.TestCase):
+    def run_cli(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "scripts/moves.py"), *map(str, args)],
+                              cwd=ROOT, capture_output=True, text=True)
+
+    def test_actual_cli_roundtrip(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            draft = temp / "draft.json"
+            self.assertEqual(self.run_cli("init", "--output", draft).returncode, 0)
+            for command in ("review", "render", "card"):
+                result = self.run_cli(command, draft)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            result = self.run_cli("outcome", draft, ROOT / "examples/bounded-outcome.json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["decision"], "stop_and_review")
+            result = self.run_cli("compare", draft, draft)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["changed_moves"], [])
+            result = self.run_cli("render", draft, "--output", draft)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(validate_plan_data(read_json_file(draft)), [])
+
+    def test_hostile_cli_inputs_are_rejected_without_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "bad.json"
+            for raw in (b"null", b"[]", b'{"goal":1,"goal":2}', b'{"secret_marker":',
+                        b"\xff", b" " * (MAX_PLAN_BYTES + 1), b"[" * 10000 + b"]" * 10000):
+                path.write_bytes(raw)
+                result = self.run_cli("review", path)
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertNotIn("secret_marker", result.stderr)
+
+    def test_large_integers_do_not_overflow_and_decrease_works(self):
+        from moves import evaluate_outcome, plan_digest
+        plan = bounded_example()
+        experiment = plan["moves"][0]["experiment"]
+        experiment.update(baseline=10**1000, target=1, direction="decrease")
+        self.assertEqual(validate_plan_data(plan), [])
+        outcome = OutcomeTests().observation(plan)
+        outcome["observed_value"] = 1
+        self.assertTrue(evaluate_outcome(plan, outcome)["target_met"])
+        outcome["observed_value"] = 10**1000
+        self.assertFalse(evaluate_outcome(plan, outcome)["target_met"])
+
+    def test_schemas_match_required_experiment_fields(self):
+        from validate_plan import EXPERIMENT_FIELDS
+        schema = json.loads((ROOT / "schemas/moves-v0.2.schema.json").read_text())
+        fields = schema["properties"]["moves"]["items"]["properties"]["experiment"]
+        self.assertEqual(set(fields["required"]), EXPERIMENT_FIELDS)
+        self.assertEqual(set(fields["properties"]), EXPERIMENT_FIELDS)
+        self.assertEqual(fields["properties"]["start_within_hours"]["maximum"], 48)
+        self.assertEqual(fields["properties"]["duration_hours"]["maximum"], 48)

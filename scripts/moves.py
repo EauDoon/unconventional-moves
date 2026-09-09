@@ -126,7 +126,7 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
         value = outcome[field]
         if value is None and field == "observed_value":
             continue
-        if type(value) not in (int, float) or not math.isfinite(value):
+        if type(value) not in (int, float) or (type(value) is float and not math.isfinite(value)):
             raise ValueError(f"outcome {field} must be finite numeric data")
         if field != "observed_value" and not 0 <= value <= 1_000_000:
             raise ValueError(f"outcome {field} must be between zero and one million")
@@ -223,6 +223,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except (OSError, UnicodeError):
         print("FAIL input or output file is unavailable or not UTF-8", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError:
+        print("FAIL invalid JSON", file=sys.stderr)
         return 1
     except ValueError as exc:
         print("FAIL " + str(exc), file=sys.stderr)

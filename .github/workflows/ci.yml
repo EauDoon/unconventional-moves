@@ -17,5 +17,7 @@ jobs:
           python-version: "3.11"
       - run: python scripts/validate.py
       - run: python scripts/validate_plan.py examples/example-plan.json
+      - run: python scripts/validate_plan.py examples/bounded-plan.json --json
+      - run: python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json
       - run: python -m unittest discover -s tests -v
       - run: python scripts/package.py --output dist
