@@ -1,0 +1,130 @@
+{
+  "contract_version": "unconventional-moves/v0.2",
+  "goal": "Synthetic example: make language practice consistent during a fictional irregular week.",
+  "high_stakes": false,
+  "moves": [
+    {
+      "id": "move-01",
+      "title": "Attach practice to an existing cue",
+      "mechanism": "precommitment",
+      "concrete_move": "Reserve a ten-minute practice block immediately after one existing daily cue.",
+      "why_overlooked": "The plan is treated as a separate appointment instead of a cue-linked habit.",
+      "test_48h": "Try the cue-linked block twice within 48 hours.",
+      "success_signal": "Both blocks start within fifteen minutes of the cue.",
+      "stop_condition": "Stop if either block displaces a non-negotiable commitment.",
+      "evidence_status": "The cue and schedule are prompt-supported; the adherence expectation is an inference. All numeric experiment values are synthetic planning assumptions, not measured outcomes.",
+      "bounds": "Twenty minutes total, no purchase, and no changes to other people's schedules.",
+      "experiment": {
+        "hypothesis": "The proposed precommitment mechanism may improve practice blocks starting within fifteen minutes of the cue.",
+        "metric": "practice blocks starting within fifteen minutes of the cue",
+        "baseline": 0,
+        "target": 2,
+        "direction": "increase",
+        "start_within_hours": 24,
+        "duration_hours": 48,
+        "max_minutes": 20,
+        "exposure": "self_only",
+        "rollback": "Remove the temporary practice aid and return to the previous private routine."
+      }
+    },
+    {
+      "id": "move-02",
+      "title": "Remove the setup step",
+      "mechanism": "subtraction",
+      "concrete_move": "Prepare one small practice card before the next irregular day begins.",
+      "why_overlooked": "People often optimize content variety before reducing startup friction.",
+      "test_48h": "Use the prepared card for two short sessions.",
+      "success_signal": "The session begins without a search or selection step.",
+      "stop_condition": "Stop if the card causes confusion that cannot be resolved from supplied material.",
+      "evidence_status": "The setup friction is an inference to test, not an established fact. All numeric experiment values are synthetic planning assumptions, not measured outcomes.",
+      "bounds": "One card and twenty minutes of preparation.",
+      "experiment": {
+        "hypothesis": "The proposed subtraction mechanism may improve sessions starting without a search step.",
+        "metric": "sessions starting without a search step",
+        "baseline": 0,
+        "target": 2,
+        "direction": "increase",
+        "start_within_hours": 24,
+        "duration_hours": 48,
+        "max_minutes": 40,
+        "exposure": "self_only",
+        "rollback": "Remove the temporary practice aid and return to the previous private routine."
+      }
+    },
+    {
+      "id": "move-03",
+      "title": "Use a visible completion mark",
+      "mechanism": "feedback",
+      "concrete_move": "Place one mark on a private weekly strip after each completed session.",
+      "why_overlooked": "Progress is usually reviewed only after a missed week.",
+      "test_48h": "Record the mark immediately after two sessions.",
+      "success_signal": "The mark is recorded within five minutes of completion.",
+      "stop_condition": "Stop if the strip creates pressure that reduces honest reporting.",
+      "evidence_status": "The proposed feedback loop is a hypothesis. All numeric experiment values are synthetic planning assumptions, not measured outcomes.",
+      "bounds": "Use paper or an existing note, with no public sharing.",
+      "experiment": {
+        "hypothesis": "The proposed feedback mechanism may improve completion marks recorded within five minutes.",
+        "metric": "completion marks recorded within five minutes",
+        "baseline": 0,
+        "target": 2,
+        "direction": "increase",
+        "start_within_hours": 24,
+        "duration_hours": 48,
+        "max_minutes": 25,
+        "exposure": "self_only",
+        "rollback": "Remove the temporary practice aid and return to the previous private routine."
+      }
+    },
+    {
+      "id": "move-04",
+      "title": "Set a minimum viable session",
+      "mechanism": "constraint removal",
+      "concrete_move": "Define a two-minute fallback session that preserves the same practice target.",
+      "why_overlooked": "Consistency plans often treat a short session as failure instead of a bounded fallback.",
+      "test_48h": "Use the fallback once when the planned block is unavailable.",
+      "success_signal": "The fallback completes without extending the day or changing the target.",
+      "stop_condition": "Stop if the fallback repeatedly replaces the intended session.",
+      "evidence_status": "The fallback may reduce all-or-nothing behavior; this is an inference. All numeric experiment values are synthetic planning assumptions, not measured outcomes.",
+      "bounds": "Two minutes and one fallback per week.",
+      "experiment": {
+        "hypothesis": "The proposed constraint removal mechanism may improve fallback sessions completed without extending the day.",
+        "metric": "fallback sessions completed without extending the day",
+        "baseline": 0,
+        "target": 1,
+        "direction": "increase",
+        "start_within_hours": 24,
+        "duration_hours": 48,
+        "max_minutes": 2,
+        "exposure": "self_only",
+        "rollback": "Remove the temporary practice aid and return to the previous private routine."
+      }
+    },
+    {
+      "id": "move-05",
+      "title": "Review the next obstacle first",
+      "mechanism": "inversion",
+      "concrete_move": "Before the next session, write one likely interruption and a single response.",
+      "why_overlooked": "Planning usually lists ideal conditions rather than the next failure mode.",
+      "test_48h": "Write one response and use it if the named interruption appears.",
+      "success_signal": "The response is usable without inventing a new plan during the interruption.",
+      "stop_condition": "Stop if the response creates additional commitments or affects another person without consent.",
+      "evidence_status": "The interruption is prompt-supported only if stated by the user; otherwise it is speculation. All numeric experiment values are synthetic planning assumptions, not measured outcomes.",
+      "bounds": "Five minutes of planning and no external commitments.",
+      "experiment": {
+        "hypothesis": "The proposed inversion mechanism may improve usable interruption responses prepared.",
+        "metric": "usable interruption responses prepared",
+        "baseline": 0,
+        "target": 1,
+        "direction": "increase",
+        "start_within_hours": 24,
+        "duration_hours": 48,
+        "max_minutes": 5,
+        "exposure": "self_only",
+        "rollback": "Remove the temporary practice aid and return to the previous private routine."
+      }
+    }
+  ],
+  "prioritized_action": "Try move-01 twice within 48 hours, starting with the next existing cue.",
+  "sources": [],
+  "selected_move_id": "move-01"
+}

@@ -62,3 +62,15 @@ class ExperimentContractTests(unittest.TestCase):
         plan = bounded_example()
         plan["contract_version"] = "unconventional-moves/v0.1"
         self.assertTrue(validate_plan_data(plan))
+
+
+class AuthoringTests(unittest.TestCase):
+    def test_init_is_complete_and_does_not_overwrite(self):
+        from moves import main
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "draft.json"
+            self.assertEqual(main(["init", "--output", str(path)]), 0)
+            self.assertEqual(validate_plan_data(read_json_file(path)), [])
+            original = path.read_bytes()
+            self.assertEqual(main(["init", "--output", str(path)]), 1)
+            self.assertEqual(path.read_bytes(), original)
