@@ -92,3 +92,17 @@ class ReviewTests(unittest.TestCase):
         plan["high_stakes"] = True
         result = review_plan(plan)
         self.assertIn("source_verification_required", [f["code"] for f in result["findings"]])
+
+
+class RenderTests(unittest.TestCase):
+    def test_content_is_inert_and_all_moves_render(self):
+        from moves import render_plan
+        plan = bounded_example()
+        plan["goal"] = '<script>alert(1)</script>\n# forged [link](javascript:x)'
+        result = render_plan(plan)
+        self.assertNotIn("<script>", result)
+        self.assertNotIn("\n# forged", result)
+        self.assertNotIn("[link](", result)
+        self.assertEqual(result.count("**Prioritized action:**"), 1)
+        self.assertEqual(result.count("**Concrete move:**"), 5)
+        self.assertIn("**Experiment rollback:**", result)

@@ -18,3 +18,11 @@ python scripts/moves.py review draft.json --output review.json
 ```
 
 Review reports flag exact repeated mechanisms, actions, and tests after case and whitespace normalization, plus unclear evidence labels. No finding means only that these narrow checks found nothing. The report always leaves human review incomplete and includes concrete review questions. It never ranks by an invented numeric quality score. High-stakes sources require human verification even when structurally valid.
+
+## Read or share a review copy
+
+```sh
+python scripts/moves.py render draft.json --output draft.md
+```
+
+The renderer includes all moves, bounds, evidence, sources, and exactly one prioritized action. User-supplied Markdown and HTML are escaped and line breaks inside values become spaces. It does not follow source URLs, embed remote content, or publish the report. Keep the JSON as the editable source.
