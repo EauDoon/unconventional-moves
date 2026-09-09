@@ -45,7 +45,17 @@ Use the [outcome schema](../schemas/outcome.schema.json). Copy `plan_sha256` and
 
 The result separately reports whether the declared numeric target was met. A triggered stop, reached time bound, or missing required consent produces `stop_and_review` even if the target was met. Otherwise the result is `review_observation`, never automatic continuation. Numeric target attainment does not prove causation or satisfy every qualitative success signal. Changed plan revisions and selected moves are rejected. High-stakes source review remains required.
 
-## Compare revisions before a new trial
+## Offline browser report
+
+Open a portable offline report in a browser:
+
+```sh
+python scripts/moves.py render draft.json --format html --output review.html
+```
+
+The self-contained report has keyboard-accessible approach links, the selected move label, complete declared experiment bounds, and a print layout. It works at mobile widths and contains no scripts, remote resources, external links, account controls, or execution actions. Authored text is escaped; the browser content policy blocks remote loads and scripts. Sources remain plain declared text for human review. Markdown remains the default format.
+
+## Portable handoff
 
 Create and check a self-contained reviewer handoff:
 
@@ -56,6 +66,8 @@ python scripts/moves.py verify-handoff handoff.json
 
 Omit `--observation` for a plan-only handoff. The bundle contains the full plan, its digest, review/card, and optional raw observation plus recomputed outcome review. Verification validates the plan and observation and recomputes every derived field. It detects accidental or partial tampering, not authorship or an attacker who rewrites a consistent unsigned bundle. All human checks remain pending. The actual formatted bundle must fit the same 1 MB JSON input bound, allowing a write/read roundtrip. Output files are never overwritten.
 
+## Printable card
+
 Export a focused printable card with all declared experiment bounds, rollback, stop condition, digest, and unchecked human review checklist:
 
 ```sh
@@ -64,7 +76,11 @@ python scripts/moves.py card draft.json --format markdown --output experiment-ca
 
 JSON remains the default for existing callers. Markdown escapes authored content and includes the recorded reason/first step. Checkboxes are prompts for a human, not stored approvals or a start control.
 
+## Revision review triggers
+
 Revision comparisons now include `review_triggers` for changed scope, selected action, evidence, measurements, stop/success conditions, and added or removed moves. Expanded declared time bounds are called out separately. `observation_binding_changed` identifies when old observations no longer match the revision, including reorder-only changes. An empty trigger list does not certify that the change is safe; every changed plan still needs review.
+
+## Constraint shortlist
 
 Find moves whose declared active-time budget and participant exposure fit your available scope:
 
@@ -74,6 +90,8 @@ python scripts/moves.py screen draft.json --max-minutes 20 --exposure self_only
 
 The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to explicitly record a human choice after review.
 
+## Declared source dates
+
 Audit declared source dates against a reference date and age threshold you choose:
 
 ```sh
@@ -81,6 +99,8 @@ python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 ```
 
 Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
+
+## Cumulative checkpoints
 
 Review several checkpoints from one revision and selected move:
 
@@ -90,7 +110,11 @@ python scripts/moves.py timeline draft.json checkpoints.json --output timeline-r
 
 `checkpoints.json` is an array of 1 to 100 completed outcome records in increasing elapsed-hour order. Active minutes are cumulative and cannot decrease. Each record must match the current digest and move. Any earlier stop reason remains in the final decision, even if a later record clears its flag. Entries recorded after the first stop are identified for human review. The report does not schedule, combine independent trials, or authorize continued activity.
 
+## Measurement context
+
 Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings computed to 28 significant digits (or `null` without a measurement), so extreme finite inputs cannot turn into JSON infinity. A fraction of 1 reaches the numeric target, a negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
+
+## Observation drafts
 
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 
@@ -100,6 +124,8 @@ python scripts/moves.py observation-draft draft.json --output observation.json
 
 The draft starts with an unavailable measurement, zero elapsed/active time, false consent/stop flags, and empty notes. Replace these fields with actual observations. Empty notes deliberately fail outcome validation; the draft is not recorded evidence or consent confirmation.
 
+## Explicit selection
+
 Record your choice in a separate validated revision instead of manually synchronizing the selected ID and action:
 
 ```sh
@@ -107,6 +133,8 @@ python scripts/moves.py select draft.json --move-id move-02 --reason "Fits avail
 ```
 
 Selection never ranks or starts a move. It requires a human reason and first step, preserves the input, and changes the plan digest. Create a fresh card and observations for that revision.
+
+## Compare revisions before a new trial
 
 ```sh
 python scripts/moves.py compare draft.json revised.json --output changes.json

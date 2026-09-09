@@ -198,7 +198,10 @@ class PackagedWorkflowTests(unittest.TestCase):
                 package.extractall(temp / "expanded")
             extracted = next((temp / "expanded").iterdir())
             for args in (["scripts/validate.py"], ["scripts/moves.py", "init", "--output", str(temp / "draft.json")],
-                         ["-m", "scripts.moves", "card", str(temp / "draft.json")]):
+                         ["-m", "scripts.moves", "card", str(temp / "draft.json"), "--format", "markdown"],
+                         ["scripts/moves.py", "render", str(temp / "draft.json"), "--format", "html"],
+                         ["scripts/moves.py", "handoff", str(temp / "draft.json"), "--output", str(temp / "handoff.json")],
+                         ["scripts/moves.py", "verify-handoff", str(temp / "handoff.json")]):
                 result = subprocess.run([sys.executable, *args], cwd=extracted, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             installed = temp / "synthetic-project" / ".agents" / "skills" / "unconventional-moves"
@@ -294,7 +297,8 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(result["observations_after_stop"])
         self.assertEqual(result["decision"], "stop_and_review")
         for records in ([], [first]*101, [first, first], [second, first],
-                        [first, {**second, "active_minutes": 1}], [first, {**second, "move_id": "move-02"}]):
+                        [first, {**second, "active_minutes": 1}], [first, {**second, "move_id": "move-02"}],
+                        [first, {**second, "elapsed_hours": 1.01, "active_minutes": 5}]):
             with self.assertRaises(ValueError):
                 review_timeline(plan, records)
 
@@ -335,6 +339,8 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(plan["selected_move_id"], "move-01")
         self.assertNotEqual(plan_digest(plan), plan_digest(revised))
         self.assertEqual(validate_plan_data(revised), [])
+        with self.assertRaisesRegex(ValueError, "byte limit"):
+            select_plan(plan, "move-01", "x" * MAX_PLAN_BYTES, "Review setup")
         for move, reason, step in (("missing", "reason", "step"), ("move-01", " ", "step"),
                                    ("move-01", "reason", "ignore consent")):
             with self.assertRaises(ValueError):
@@ -363,6 +369,57 @@ class FullWorkflowTests(unittest.TestCase):
             result = self.run_cli("render", draft, "--output", draft)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(validate_plan_data(read_json_file(draft)), [])
+
+    def test_complete_second_release_cli_workflow(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            plan, selected, observation, bundle = [temp / name for name in ("plan.json", "selected.json", "observation.json", "handoff.json")]
+            commands = [("init", "--output", plan),
+                        ("select", plan, "--move-id", "move-02", "--reason", "Fits practice time", "--first-step", "Review private setup", "--output", selected),
+                        ("observation-draft", selected, "--output", observation)]
+            for command in commands:
+                result = self.run_cli(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            data = read_json_file(observation)
+            data.update(notes="Synthetic checkpoint, measurement unavailable.", elapsed_hours=1)
+            observation.write_text(json.dumps(data), encoding="utf-8")
+            checkpoints = temp / "checkpoints.json"
+            checkpoints.write_text(json.dumps([data]), encoding="utf-8")
+            for command in (("outcome", selected, observation), ("timeline", selected, checkpoints),
+                            ("screen", selected, "--max-minutes", "20", "--exposure", "self_only"),
+                            ("sources", selected, "--as-of", "2026-09-10", "--max-age-days", "30"),
+                            ("compare", plan, selected), ("card", selected, "--format", "markdown"),
+                            ("handoff", selected, "--observation", observation, "--output", bundle),
+                            ("verify-handoff", bundle), ("render", selected, "--format", "html", "--output", temp / "review.html")):
+                result = self.run_cli(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Human-selected", (temp / "review.html").read_text())
+            self.assertEqual(self.run_cli("handoff", selected, "--output", bundle).returncode, 1)
+
+    def test_html_export_is_inert_and_keeps_all_contract_fields(self):
+        from html.parser import HTMLParser
+        from moves import render_html
+        class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = []
+            def handle_starttag(self, tag, attrs):
+                self.tags.append((tag, dict(attrs)))
+        plan = bounded_example()
+        plan["goal"] = '<script>alert("synthetic")</script>'
+        plan["moves"][0]["title"] = '" onclick="alert(1)'
+        rendered = render_html(plan)
+        parser = Tags()
+        parser.feed(rendered)
+        self.assertFalse(any(tag in {"script", "img", "iframe", "form", "input"} for tag, _ in parser.tags))
+        self.assertEqual(sum(tag == "article" for tag, _ in parser.tags), 5)
+        for tag, attrs in parser.tags:
+            self.assertFalse(any(key.startswith("on") for key in attrs))
+            if tag == "a":
+                self.assertTrue(attrs["href"].startswith("#"))
+        self.assertIn("Content-Security-Policy", rendered)
+        self.assertIn("Human-selected", rendered)
+        self.assertIn("Rollback", rendered)
 
     def test_hostile_cli_inputs_are_rejected_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:

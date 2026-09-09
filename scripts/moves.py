@@ -91,6 +91,28 @@ def render_plan(plan: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_html(plan: dict) -> str:
+    def escape(value):
+        return html.escape(str(value), quote=True)
+    selected = plan.get("selected_move_id")
+    sections, navigation = [], []
+    for index, move in enumerate(plan["moves"], 1):
+        anchor = "move-" + str(index)
+        chosen = move["id"] == selected
+        navigation.append(f'<a href="#{anchor}">{index:02d} {escape(move["title"])}' + (" (selected)" if chosen else "") + '</a>')
+        fields = "".join(f'<dt>{escape(key.replace("_", " ").title())}</dt><dd>{escape(move[key])}</dd>'
+                         for key in ("mechanism", "concrete_move", "why_overlooked", "test_48h", "success_signal", "stop_condition", "evidence_status", "bounds"))
+        experiment = ""
+        if "experiment" in move:
+            rows = "".join(f'<dt>{escape(key.replace("_", " ").title())}</dt><dd>{escape(value)}</dd>' for key, value in move["experiment"].items())
+            experiment = '<details open><summary>Declared experiment and rollback</summary><dl>' + rows + '</dl></details>'
+        sections.append(f'<article id="{anchor}"><p class="eyebrow">Approach {index:02d}' + (" / Human-selected" if chosen else "") +
+                        f'</p><h2>{escape(move["title"])}</h2><p class="identity">{escape(move["id"])}</p><dl>{fields}</dl>{experiment}<a class="back" href="#top">Back to overview</a></article>')
+    sources = "".join('<li>' + escape(" | ".join(str(source[key]) for key in ("title", "publisher", "date", "url", "supports") if key in source)) + '</li>' for source in plan["sources"])
+    css = '''body{margin:0;background:#f3f5f8;color:#172337;font:17px/1.6 system-ui,sans-serif}main{max-width:1060px;margin:auto;padding:40px 24px}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.15;margin:12px 0}h2{font-size:1.6rem;line-height:1.25}h3{font-size:1.1rem}.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700;color:#35567b}.notice{border-left:4px solid #bd7c22;background:#fff5e1;padding:16px 20px}.identity{font:13px/1.6 ui-monospace,monospace;color:#526073;overflow-wrap:anywhere}nav{display:grid;gap:8px;margin:24px 0}a{color:#174d85;text-underline-offset:4px}nav a{padding:10px 14px;border:1px solid #cbd3df;background:white;border-radius:5px}a:focus-visible,summary:focus-visible{outline:3px solid #9b4e05;outline-offset:4px}article{background:white;border:1px solid #dce2ea;border-radius:10px;padding:28px;margin:24px 0;scroll-margin-top:16px}dl{display:grid;grid-template-columns:180px 1fr;gap:12px 20px}dt{font-weight:650}dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}summary{cursor:pointer;font-weight:700;padding:10px 0}details{border-top:1px solid #dce2ea;margin-top:22px}.back{display:inline-block;margin-top:18px}li{overflow-wrap:anywhere}footer{padding-top:20px;border-top:1px solid #cbd3df}section p{overflow-wrap:anywhere}@media(max-width:600px){main{padding:24px 16px}article{padding:20px}dl{grid-template-columns:1fr;gap:4px}dd{margin-bottom:14px}}@media print{body{background:white;font-size:11pt}main{max-width:none;padding:0}nav,.back{display:none}article{break-inside:avoid;border-radius:0}details{display:block}a{color:inherit}}'''
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>Unconventional Moves / Review</title><style>' + css + '</style></head><body><main id="top"><header><p class="eyebrow">Unconventional Moves / Offline review</p><h1>A considered next move.</h1><p>' + escape(plan["goal"]) + '</p><p class="identity">Plan SHA-256: ' + plan_digest(plan) + '</p><p class="notice"><strong>Human review required.</strong> No action is started or approved. Claims, consent, measurement, and rollback still need review.' + (' High-stakes plan: current reliable sources require human verification.' if plan["high_stakes"] else '') + '</p></header><nav aria-label="Approaches">' + ''.join(navigation) + '</nav><section aria-label="Recorded priority"><h2>Recorded priority</h2><p>' + escape(plan["prioritized_action"]) + '</p></section>' + ''.join(sections) + '<footer><h2>Declared sources</h2><p>No source was opened or verified by this report.</p><ul>' + (sources or '<li>None supplied.</li>') + '</ul><p>Comparison, novelty, safety, and effectiveness remain matters for human review. This offline report contains no execution or account controls.</p></footer></main></body></html>\n'
+
+
 def plan_digest(plan: dict) -> str:
     return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("utf-8")).hexdigest()
 
@@ -308,6 +330,8 @@ def review_timeline(plan: dict, observations: object) -> dict:
         hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
         if hours <= previous_hours or minutes < previous_minutes:
             raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
+        if index > 1 and minutes - previous_minutes > (hours - previous_hours) * 60:
+            raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
             first_stop = index
@@ -341,6 +365,8 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     failures = validate_plan_data(revised)
     if failures:
         raise ValueError("; ".join(failures))
+    if len((json.dumps(revised, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("selected revision exceeds the supported JSON byte limit")
     return revised
 
 
@@ -384,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--output", type=Path)
     render = commands.add_parser("render", help="Render a validated plan as inert Markdown")
     render.add_argument("plan", type=Path)
+    render.add_argument("--format", choices=["markdown", "html"], default="markdown")
     render.add_argument("--output", type=Path)
     card = commands.add_parser("card", help="Prepare a review-only card for the selected move")
     card.add_argument("plan", type=Path)
@@ -424,7 +451,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "review":
             emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "render":
-            emit(render_plan(read_plan(args.plan)), args.output)
+            plan = read_plan(args.plan)
+            emit(render_html(plan) if args.format == "html" else render_plan(plan), args.output)
         elif args.command == "card":
             plan = read_plan(args.plan)
             emit(render_card(plan) if args.format == "markdown" else json.dumps(experiment_card(plan), indent=2) + "\n", args.output)
