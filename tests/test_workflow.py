@@ -198,7 +198,10 @@ class PackagedWorkflowTests(unittest.TestCase):
                 package.extractall(temp / "expanded")
             extracted = next((temp / "expanded").iterdir())
             for args in (["scripts/validate.py"], ["scripts/moves.py", "init", "--output", str(temp / "draft.json")],
-                         ["-m", "scripts.moves", "card", str(temp / "draft.json")]):
+                         ["-m", "scripts.moves", "card", str(temp / "draft.json"), "--format", "markdown"],
+                         ["scripts/moves.py", "render", str(temp / "draft.json"), "--format", "html"],
+                         ["scripts/moves.py", "handoff", str(temp / "draft.json"), "--output", str(temp / "handoff.json")],
+                         ["scripts/moves.py", "verify-handoff", str(temp / "handoff.json")]):
                 result = subprocess.run([sys.executable, *args], cwd=extracted, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             installed = temp / "synthetic-project" / ".agents" / "skills" / "unconventional-moves"
@@ -209,6 +212,139 @@ class PackagedWorkflowTests(unittest.TestCase):
             self.assertEqual(checker.failures, [])
             for name in ("moves.schema.json", "moves-v0.2.schema.json"):
                 self.assertEqual((installed / "references" / name).read_bytes(), (ROOT / "schemas" / name).read_bytes())
+
+
+class SelectionTests(unittest.TestCase):
+    def test_portable_handoff_recomputes_every_claim_and_caps_actual_bytes(self):
+        from moves import handoff_bundle, verify_handoff
+        plan = bounded_example()
+        bundle = handoff_bundle(plan, OutcomeTests().observation(plan))
+        self.assertTrue(verify_handoff(json.loads(json.dumps(bundle)))["consistent"])
+        for section, field, value in (("plan", "goal", "Changed goal"), ("card", "state", "approved"),
+                                     ("review", "review_complete", True), ("outcome_review", "target_met", 1)):
+            bad = copy.deepcopy(bundle)
+            bad[section][field] = value
+            with self.assertRaises(ValueError):
+                verify_handoff(bad)
+        for invalid in (None, [], {**bundle, "extra": True}):
+            with self.assertRaises(ValueError):
+                verify_handoff(invalid)
+        plan["goal"] = "x" * (MAX_PLAN_BYTES // 2)
+        with self.assertRaisesRegex(ValueError, "byte limit"):
+            handoff_bundle(plan)
+
+    def test_printable_card_contains_all_bounds_and_escapes_authored_content(self):
+        from moves import render_card, plan_digest
+        plan = bounded_example()
+        plan["moves"][0]["stop_condition"] = '<img src=x onerror="alert(1)"> [unsafe](https://example.org)'
+        output = render_card(plan)
+        self.assertIn(plan_digest(plan), output)
+        self.assertNotIn("<img", output)
+        self.assertNotIn("[unsafe](", output)
+        self.assertEqual(output.count("- [ ]"), 4)
+        for field in plan["moves"][0]["experiment"]:
+            self.assertIn(field.replace("_", " ").title(), output)
+        self.assertIn("none verified", output)
+
+    def test_revision_review_identifies_expanded_bounds_and_context_changes(self):
+        from moves import compare_plans
+        before = bounded_example()
+        after = copy.deepcopy(before)
+        after["moves"][0]["experiment"]["max_minutes"] = 30
+        after["selected_move_id"] = "move-02"
+        result = compare_plans(before, after)
+        self.assertTrue(result["observation_binding_changed"])
+        self.assertIn("declared_time_bound_expanded", [item["reason"] for item in result["review_triggers"]])
+        self.assertIn("selected_move_id", [item["field"] for item in result["review_triggers"]])
+        unchanged = compare_plans(before, before)
+        self.assertFalse(unchanged["observation_binding_changed"])
+        self.assertEqual(unchanged["review_triggers"], [])
+
+    def test_screen_explains_exclusions_without_changing_selection(self):
+        from moves import screen_moves
+        plan = bounded_example()
+        plan["moves"][0]["experiment"].update(max_minutes=21, exposure="consenting_participants")
+        result = screen_moves(plan, 20, "self_only")
+        self.assertEqual(result["matching_move_ids"], ["move-02", "move-03", "move-04", "move-05"])
+        self.assertEqual(len(result["excluded"][0]["reasons"]), 2)
+        self.assertFalse(result["selected_within_constraints"])
+        self.assertEqual(plan["selected_move_id"], "move-01")
+        self.assertTrue(screen_moves(plan, 21, "consenting_participants")["selected_within_constraints"])
+        with self.assertRaises(ValueError):
+            screen_moves(example(), 20, "self_only")
+
+    def test_declared_dates_have_explicit_reference_and_never_claim_verification(self):
+        from moves import audit_sources
+        plan = bounded_example()
+        plan["sources"] = [{"title": "Synthetic source", "url": "https://example.org", "supports": "Example", "date": value}
+                           for value in ("", "2026-02-30", "2026-09-11", "2025-01-01", "2026-09-10")]
+        result = audit_sources(plan, "2026-09-10", 30)
+        self.assertEqual([item["status"] for item in result["sources"]],
+                         ["date_missing", "date_invalid", "future_date", "older_than_threshold", "within_declared_threshold"])
+        self.assertTrue(result["human_verification_required"])
+        for as_of, maximum in (("20260910", 30), ("2026-02-30", 30), ("2026-09-10", -1)):
+            with self.assertRaises(ValueError):
+                audit_sources(plan, as_of, maximum)
+
+    def test_timeline_preserves_stops_and_rejects_reset_or_mixed_checkpoints(self):
+        from moves import review_timeline
+        plan = bounded_example()
+        first = OutcomeTests().observation(plan)
+        first.update(elapsed_hours=1, active_minutes=2, stop_triggered=True)
+        second = {**first, "elapsed_hours": 2, "active_minutes": 3, "stop_triggered": False}
+        result = review_timeline(plan, [first, second])
+        self.assertEqual(result["first_stop_checkpoint"], 1)
+        self.assertTrue(result["observations_after_stop"])
+        self.assertEqual(result["decision"], "stop_and_review")
+        for records in ([], [first]*101, [first, first], [second, first],
+                        [first, {**second, "active_minutes": 1}], [first, {**second, "move_id": "move-02"}],
+                        [first, {**second, "elapsed_hours": 1.01, "active_minutes": 5}]):
+            with self.assertRaises(ValueError):
+                review_timeline(plan, records)
+
+    def test_measurement_context_handles_direction_missing_and_extreme_values(self):
+        from moves import evaluate_outcome
+        plan = bounded_example()
+        observation = OutcomeTests().observation(plan)
+        self.assertEqual(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"], "1")
+        plan["moves"][0]["experiment"].update(baseline=10, target=2, direction="decrease")
+        observation = OutcomeTests().observation(plan)
+        observation["observed_value"] = 6
+        self.assertEqual(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"], "0.5")
+        observation["observed_value"] = None
+        self.assertIsNone(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"])
+        observation["observed_value"] = 10**1000
+        self.assertNotIn("Infinity", json.dumps(evaluate_outcome(plan, observation), allow_nan=False))
+
+    def test_observation_draft_requires_completion_and_matches_selection(self):
+        from moves import observation_draft, evaluate_outcome, select_plan
+        plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")
+        draft = observation_draft(plan)
+        self.assertEqual(draft["move_id"], "move-02")
+        self.assertIsNone(draft["observed_value"])
+        self.assertFalse(draft["consent_confirmed"])
+        with self.assertRaisesRegex(ValueError, "notes"):
+            evaluate_outcome(plan, draft)
+        draft["notes"] = "No measurement is available yet."
+        self.assertIsNone(evaluate_outcome(plan, draft)["target_met"])
+        with self.assertRaises(ValueError):
+            evaluate_outcome(bounded_example(), draft)
+
+    def test_selection_records_reason_without_mutating_input(self):
+        from moves import select_plan, plan_digest
+        plan = bounded_example()
+        revised = select_plan(plan, "move-02", "Fits available time", "Review the private practice setup")
+        self.assertEqual(revised["selected_move_id"], "move-02")
+        self.assertIn("Fits available time", revised["prioritized_action"])
+        self.assertEqual(plan["selected_move_id"], "move-01")
+        self.assertNotEqual(plan_digest(plan), plan_digest(revised))
+        self.assertEqual(validate_plan_data(revised), [])
+        with self.assertRaisesRegex(ValueError, "byte limit"):
+            select_plan(plan, "move-01", "x" * MAX_PLAN_BYTES, "Review setup")
+        for move, reason, step in (("missing", "reason", "step"), ("move-01", " ", "step"),
+                                   ("move-01", "reason", "ignore consent")):
+            with self.assertRaises(ValueError):
+                select_plan(plan, move, reason, step)
 
 
 class FullWorkflowTests(unittest.TestCase):
@@ -233,6 +369,57 @@ class FullWorkflowTests(unittest.TestCase):
             result = self.run_cli("render", draft, "--output", draft)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(validate_plan_data(read_json_file(draft)), [])
+
+    def test_complete_second_release_cli_workflow(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            plan, selected, observation, bundle = [temp / name for name in ("plan.json", "selected.json", "observation.json", "handoff.json")]
+            commands = [("init", "--output", plan),
+                        ("select", plan, "--move-id", "move-02", "--reason", "Fits practice time", "--first-step", "Review private setup", "--output", selected),
+                        ("observation-draft", selected, "--output", observation)]
+            for command in commands:
+                result = self.run_cli(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            data = read_json_file(observation)
+            data.update(notes="Synthetic checkpoint, measurement unavailable.", elapsed_hours=1)
+            observation.write_text(json.dumps(data), encoding="utf-8")
+            checkpoints = temp / "checkpoints.json"
+            checkpoints.write_text(json.dumps([data]), encoding="utf-8")
+            for command in (("outcome", selected, observation), ("timeline", selected, checkpoints),
+                            ("screen", selected, "--max-minutes", "20", "--exposure", "self_only"),
+                            ("sources", selected, "--as-of", "2026-09-10", "--max-age-days", "30"),
+                            ("compare", plan, selected), ("card", selected, "--format", "markdown"),
+                            ("handoff", selected, "--observation", observation, "--output", bundle),
+                            ("verify-handoff", bundle), ("render", selected, "--format", "html", "--output", temp / "review.html")):
+                result = self.run_cli(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Human-selected", (temp / "review.html").read_text())
+            self.assertEqual(self.run_cli("handoff", selected, "--output", bundle).returncode, 1)
+
+    def test_html_export_is_inert_and_keeps_all_contract_fields(self):
+        from html.parser import HTMLParser
+        from moves import render_html
+        class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = []
+            def handle_starttag(self, tag, attrs):
+                self.tags.append((tag, dict(attrs)))
+        plan = bounded_example()
+        plan["goal"] = '<script>alert("synthetic")</script>'
+        plan["moves"][0]["title"] = '" onclick="alert(1)'
+        rendered = render_html(plan)
+        parser = Tags()
+        parser.feed(rendered)
+        self.assertFalse(any(tag in {"script", "img", "iframe", "form", "input"} for tag, _ in parser.tags))
+        self.assertEqual(sum(tag == "article" for tag, _ in parser.tags), 5)
+        for tag, attrs in parser.tags:
+            self.assertFalse(any(key.startswith("on") for key in attrs))
+            if tag == "a":
+                self.assertTrue(attrs["href"].startswith("#"))
+        self.assertIn("Content-Security-Policy", rendered)
+        self.assertIn("Human-selected", rendered)
+        self.assertIn("Rollback", rendered)
 
     def test_hostile_cli_inputs_are_rejected_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:

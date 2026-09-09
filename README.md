@@ -90,6 +90,8 @@ against [`schemas/moves.schema.json`](schemas/moves.schema.json).
 
 The optional Python CLI adds a complete local workflow without model calls, accounts, or runtime dependencies. It supports both the original plan contract and an additive version 0.2 with measurable experiment bounds.
 
+You can now record an explicit selection, draft correctly bound observations, review cumulative checkpoints, screen declared time/exposure limits, and audit declared source dates. Printable cards, self-contained JSON handoffs, and an offline HTML report make human review portable. Handoff verification checks internal consistency; it does not authenticate claims, consent, or approval.
+
 ```sh
 python scripts/moves.py init --output draft.json
 python scripts/moves.py review draft.json
@@ -97,6 +99,9 @@ python scripts/moves.py render draft.json --output draft.md
 python scripts/moves.py card draft.json --output card.json
 python scripts/moves.py outcome draft.json examples/bounded-outcome.json
 python scripts/moves.py compare draft.json examples/bounded-plan.json
+python scripts/moves.py render draft.json --format html --output review.html
+python scripts/moves.py handoff draft.json --output handoff.json
+python scripts/moves.py verify-handoff handoff.json
 ```
 
 These commands replay a **synthetic language-practice example**. The outcome fixture matches the unchanged initial draft only. Editing a plan requires a new card and honest observations tied to that revision. The synthetic outcome meets its numeric target but returns `stop_and_review` because its bounds are reached. No command runs an experiment, establishes consent, or authorizes continuation.
