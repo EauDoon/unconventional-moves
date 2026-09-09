@@ -47,6 +47,8 @@ The result separately reports whether the declared numeric target was met. A tri
 
 ## Compare revisions before a new trial
 
+Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings computed to 28 significant digits (or `null` without a measurement), so extreme finite inputs cannot turn into JSON infinity. A fraction of 1 reaches the numeric target, a negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
+
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 
 ```sh

@@ -10,6 +10,7 @@ import math
 import re
 import sys
 from pathlib import Path
+from decimal import Decimal, localcontext
 
 try:
     from .validate_plan import read_json_file, validate_plan_data
@@ -150,9 +151,23 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
     observed = outcome["observed_value"]
     target_met = None if observed is None else (observed >= experiment["target"] if experiment["direction"] == "increase" else observed <= experiment["target"])
     return {"plan_sha256": plan_digest(plan), "move_id": move["id"], "target_met": target_met,
+            "measurement": measurement_context(experiment, observed),
             "decision": "stop_and_review" if reasons else "review_observation", "reasons": reasons,
             "source_verification_required": plan["high_stakes"],
             "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
+
+
+def measurement_context(experiment: dict, observed: int | float | None) -> dict:
+    result = {key: experiment[key] for key in ("metric", "baseline", "target", "direction")}
+    result.update(observed_value=observed, change_from_baseline=None, progress_fraction=None)
+    if observed is not None:
+        with localcontext() as context:
+            context.prec = 28
+            baseline, target, value = (Decimal(str(number)) for number in
+                                       (experiment["baseline"], experiment["target"], observed))
+            result["change_from_baseline"] = str(value - baseline)
+            result["progress_fraction"] = str((value - baseline) / (target - baseline))
+    return result
 
 
 def compare_plans(before: dict, after: dict) -> dict:

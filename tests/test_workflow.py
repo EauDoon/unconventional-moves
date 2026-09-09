@@ -212,6 +212,20 @@ class PackagedWorkflowTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_measurement_context_handles_direction_missing_and_extreme_values(self):
+        from moves import evaluate_outcome
+        plan = bounded_example()
+        observation = OutcomeTests().observation(plan)
+        self.assertEqual(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"], "1")
+        plan["moves"][0]["experiment"].update(baseline=10, target=2, direction="decrease")
+        observation = OutcomeTests().observation(plan)
+        observation["observed_value"] = 6
+        self.assertEqual(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"], "0.5")
+        observation["observed_value"] = None
+        self.assertIsNone(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"])
+        observation["observed_value"] = 10**1000
+        self.assertNotIn("Infinity", json.dumps(evaluate_outcome(plan, observation), allow_nan=False))
+
     def test_observation_draft_requires_completion_and_matches_selection(self):
         from moves import observation_draft, evaluate_outcome, select_plan
         plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")
