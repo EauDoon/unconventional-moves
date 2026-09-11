@@ -16,4 +16,4 @@ This is an independent community project.
 
 ## Example data
 
-All examples are synthetic and limited to learning a language, reducing meeting overload, and validating a small product idea. They do not describe real people, organizations, products, or events.
+All examples are synthetic, covering partnership activation, product adoption, distribution, operational efficiency, and personal learning. They do not describe real people, organizations, products, or events. Behavioral probe responses are model-generated answers to fictional briefs, not observations of real experiments.

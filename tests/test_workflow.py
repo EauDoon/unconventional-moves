@@ -65,6 +65,14 @@ class ExperimentContractTests(unittest.TestCase):
 
 
 class AuthoringTests(unittest.TestCase):
+    def test_unencodable_output_does_not_create_an_empty_artifact(self):
+        from moves import emit
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "review.md"
+            with self.assertRaises(UnicodeEncodeError):
+                emit("Invalid Unicode: \ud800", path)
+            self.assertFalse(path.exists())
+
     def test_init_is_complete_and_does_not_overwrite(self):
         from moves import main
         with tempfile.TemporaryDirectory() as td:
@@ -95,6 +103,30 @@ class ReviewTests(unittest.TestCase):
 
 
 class RenderTests(unittest.TestCase):
+    def test_priority_is_last_and_declared_selection_is_not_human_approval(self):
+        from moves import render_plan, render_html, render_card, experiment_card, observation_draft
+        plan = bounded_example()
+        plan["selected_move_id"] = "move-02"
+        plan["prioritized_action"] = "Start move-01 instead."
+        # Free-text disagreement stays valid for semantic review, never rebinding the card.
+        self.assertEqual(validate_plan_data(plan), [])
+        markdown = render_plan(plan)
+        rendered = render_html(plan)
+        for output in (markdown, rendered, render_card(plan)):
+            self.assertIn("semantic alignment is not validated", output)
+            self.assertNotIn("Human-selected", output)
+        self.assertIn("**Declared selected move:** move\\-02", markdown)
+        self.assertIn("Declared selected move: move-02", rendered)
+        self.assertLess(markdown.index("## Sources"), markdown.index("**Prioritized action:**"))
+        self.assertTrue(markdown.rstrip().endswith("Start move\\-01 instead\\."))
+        self.assertTrue(render_card(plan).rstrip().endswith("Start move\\-01 instead\\."))
+        self.assertLess(rendered.index("<h2>Declared sources</h2>"), rendered.index("<h2>Recorded priority</h2>"))
+        self.assertEqual(experiment_card(plan)["move_id"], "move-02")
+        self.assertEqual(observation_draft(plan)["move_id"], "move-02")
+        legacy = render_plan(example())
+        self.assertNotIn("Declared selected move", legacy)
+        self.assertLess(legacy.index("## Sources"), legacy.index("**Prioritized action:**"))
+
     def test_content_is_inert_and_all_moves_render(self):
         from moves import render_plan
         plan = bounded_example()
@@ -393,7 +425,7 @@ class FullWorkflowTests(unittest.TestCase):
                             ("verify-handoff", bundle), ("render", selected, "--format", "html", "--output", temp / "review.html")):
                 result = self.run_cli(*command)
                 self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Human-selected", (temp / "review.html").read_text())
+            self.assertIn("Declared selection", (temp / "review.html").read_text())
             self.assertEqual(self.run_cli("handoff", selected, "--output", bundle).returncode, 1)
 
     def test_html_export_is_inert_and_keeps_all_contract_fields(self):
@@ -418,7 +450,8 @@ class FullWorkflowTests(unittest.TestCase):
             if tag == "a":
                 self.assertTrue(attrs["href"].startswith("#"))
         self.assertIn("Content-Security-Policy", rendered)
-        self.assertIn("Human-selected", rendered)
+        self.assertIn("Declared selection", rendered)
+        self.assertNotIn("Human-selected", rendered)
         self.assertIn("Rollback", rendered)
 
     def test_hostile_cli_inputs_are_rejected_without_traceback(self):
