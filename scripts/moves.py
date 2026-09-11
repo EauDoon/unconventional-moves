@@ -342,7 +342,17 @@ def review_timeline(plan: dict, observations: object) -> dict:
                             "interval_activity_fraction": str(interval_minutes / (interval_hours * 60)) if interval_hours else None,
                             "review": review, "after_stop": first_stop is not None and index > first_stop})
         previous_hours, previous_minutes = hours, minutes
+    measured = [row for row in checkpoints if row["review"]["target_met"] is not None]
+    attained = [row["checkpoint"] for row in measured if row["review"]["target_met"]]
+    first_target = attained[0] if attained else None
+    lost = [row["checkpoint"] for row in measured
+            if first_target is not None and row["checkpoint"] > first_target and not row["review"]["target_met"]]
     return {"plan_sha256": plan_digest(plan), "move_id": selected_move(plan)["id"],
+            "measurement_summary": {"measured_checkpoints": len(measured),
+                "missing_checkpoints": [row["checkpoint"] for row in checkpoints if row["review"]["target_met"] is None],
+                "first_target_checkpoint": first_target, "target_lost_checkpoints": lost,
+                "latest_checkpoint_target_met": checkpoints[-1]["review"]["target_met"],
+                "first_target_after_stop": first_target is not None and first_stop is not None and first_target > first_stop},
             "checkpoints": checkpoints, "first_stop_checkpoint": first_stop,
             "decision": "stop_and_review" if stop_reasons else "review_observations",
             "reasons": sorted(stop_reasons), "observations_after_stop": first_stop is not None and first_stop < len(observations),

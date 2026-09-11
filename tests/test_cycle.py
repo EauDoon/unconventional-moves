@@ -13,6 +13,23 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_measurement_summary_keeps_gaps_regressions_and_stop_history(self):
+        rows = [{**self.first, "elapsed_hours": index, "observed_value": value, "stop_triggered": index == 1}
+                for index, value in enumerate([None, 2, None, 1, 3], 1)]
+        result = moves.review_timeline(self.plan, rows)
+        summary = result["measurement_summary"]
+        self.assertEqual(summary["missing_checkpoints"], [1, 3])
+        self.assertEqual(summary["measured_checkpoints"], 3)
+        self.assertEqual(summary["first_target_checkpoint"], 2)
+        self.assertEqual(summary["target_lost_checkpoints"], [4])
+        self.assertTrue(summary["first_target_after_stop"])
+        self.assertTrue(summary["latest_checkpoint_target_met"])
+        self.assertEqual(result["decision"], "stop_and_review")
+        self.plan["moves"][0]["experiment"].update(baseline=10, target=2, direction="decrease")
+        for row in rows:
+            row["plan_sha256"] = moves.plan_digest(self.plan)
+        self.assertEqual(moves.review_timeline(self.plan, rows)["measurement_summary"]["target_lost_checkpoints"], [5])
+
     def test_record_validates_history_and_preserves_original(self):
         history = [self.first]
         self.assertEqual(moves.append_checkpoint(self.plan, self.second, history), [self.first, self.second])

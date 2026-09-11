@@ -122,6 +122,8 @@ Outcome reviews include the declared metric, baseline, target, direction, and ob
 
 ## Observation drafts
 
+Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
+
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 
 ```sh
