@@ -13,6 +13,19 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_sources_identify_repeated_citations_without_merging_distinct_paths(self):
+        self.plan["sources"] = [{"title": "Synthetic language source", "url": url, "publisher": publisher,
+                                  "supports": "Practice hypothesis", "date": "2026-09-10"}
+                                 for url, publisher in [("https://example.org/Study#one", " Example  Publisher "),
+                                    ("https://EXAMPLE.org/Study#two", "example publisher"),
+                                    ("https://example.org/study", ""), ("https://example.org/Study?q=2", "")]]
+        result = moves.audit_sources(self.plan, "2026-09-11", 30)
+        self.assertEqual(result["repeated_url_groups"], [[1, 2]])
+        self.assertEqual(result["shared_declared_publisher_groups"], [[1, 2]])
+        self.assertTrue(result["independence_review_required"])
+        self.assertTrue(result["human_verification_required"])
+        self.assertEqual(len(result["sources"]), 4)
+
     def test_screen_respects_start_and_duration_without_reselection(self):
         self.plan["moves"][1]["experiment"].update(start_within_hours=0, duration_hours=1)
         result = moves.screen_moves(self.plan, 20, "self_only", 0, 1)

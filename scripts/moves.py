@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from decimal import Decimal, localcontext
 from datetime import date
+from urllib.parse import urlsplit
 
 try:
     from .validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
@@ -312,8 +313,14 @@ def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
     reference = iso_date(as_of)
     if type(max_age_days) is not int or not 0 <= max_age_days <= 36500:
         raise ValueError("max age must be an integer from 0 to 36500 days")
-    sources = []
+    sources, urls, publishers = [], {}, {}
     for index, source in enumerate(plan["sources"], 1):
+        parsed = urlsplit(source["url"])
+        url_key = parsed._replace(netloc=parsed.netloc.lower(), fragment="").geturl()
+        urls.setdefault(url_key, []).append(index)
+        publisher_key = " ".join(source.get("publisher", "").casefold().split())
+        if publisher_key:
+            publishers.setdefault(publisher_key, []).append(index)
         declared = source.get("date", "")
         age, status = None, "date_missing"
         if declared:
@@ -325,6 +332,9 @@ def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
         sources.append({"source": index, "title": source["title"], "declared_date": declared or None,
                         "age_days": age, "status": status})
     return {"plan_sha256": plan_digest(plan), "as_of": as_of, "max_age_days": max_age_days,
+            "repeated_url_groups": [indices for indices in urls.values() if len(indices) > 1],
+            "shared_declared_publisher_groups": [indices for indices in publishers.values() if len(indices) > 1],
+            "independence_review_required": any(len(indices) > 1 for indices in [*urls.values(), *publishers.values()]),
             "sources": sources, "sources_absent": not sources, "human_verification_required": True,
             "limitation": "Dates are user-declared. No URL was opened and no publisher, claim, relevance, or actual currency was verified."}
 

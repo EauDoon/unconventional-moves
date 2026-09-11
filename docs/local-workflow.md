@@ -102,6 +102,8 @@ python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 
 Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
 
+The source audit also groups repeated URLs (ignoring fragments and host case) and equal declared publisher names (ignoring case and repeated whitespace). Groups use the original one-based source positions and preserve every citation. Different URL paths and queries remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
+
 ## Cumulative checkpoints
 
 Review several checkpoints from one revision and selected move:
