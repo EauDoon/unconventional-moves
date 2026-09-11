@@ -13,6 +13,38 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_debrief_includes_evidence_and_escapes_authored_markup(self):
+        first = {**self.first, "stop_triggered": True, "notes": '<script>synthetic</script> [link](https://example.org)'}
+        rendered = moves.render_debrief(self.plan, [first, self.second])
+        self.assertIn("stop_and_review", rendered)
+        self.assertIn("After earlier stop: True", rendered)
+        self.assertIn(moves.plan_digest(self.plan), rendered)
+        self.assertNotIn("<script>", rendered)
+        self.assertNotIn("[link](", rendered)
+        self.assertIn("alternative explanation", rendered)
+        self.assertIn("Rollback:", rendered)
+        self.assertIn("None supplied.", rendered)
+
+    def test_new_commands_run_end_to_end_and_reject_mixed_handoff_inputs(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            plan, observation, history, bundle = [directory / name for name in ("plan.json", "observation.json", "history.json", "bundle.json")]
+            plan.write_text(json.dumps(self.plan), encoding="utf-8")
+            observation.write_text(json.dumps(self.first), encoding="utf-8")
+            runner = fixtures.FullWorkflowTests()
+            commands = [("record", plan, observation, "--output", history),
+                        ("limits", plan, history), ("table", plan), ("table", plan, "--format", "csv"),
+                        ("screen", plan, "--max-minutes", 20, "--exposure", "self_only", "--max-start-hours", 24, "--max-duration-hours", 48),
+                        ("handoff", plan, "--timeline", history, "--output", bundle),
+                        ("verify-handoff", bundle), ("debrief", plan, history, "--output", directory / "debrief.md")]
+            for command in commands:
+                result = runner.run_cli(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Human learning review", (directory / "debrief.md").read_text(encoding="utf-8"))
+            result = runner.run_cli("handoff", plan, "--timeline", history, "--observation", observation, "--output", directory / "invalid.json")
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse((directory / "invalid.json").exists())
+
     def test_whole_timeline_handoff_preserves_stops_and_detects_partial_tampering(self):
         first = {**self.first, "stop_triggered": True}
         bundle = moves.timeline_handoff(self.plan, [first, self.second])

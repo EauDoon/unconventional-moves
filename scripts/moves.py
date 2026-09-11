@@ -400,6 +400,45 @@ def review_timeline(plan: dict, observations: object) -> dict:
             "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
 
 
+def render_debrief(plan: dict, observations: object) -> str:
+    timeline = review_timeline(plan, observations)
+    limits = review_limits(plan, observations)
+    move = selected_move(plan)
+    lines = ["# Experiment debrief", "", "Human review required. No continuation or expansion is authorized.", "",
+             "Plan SHA-256: " + timeline["plan_sha256"], "", "Goal: " + markdown_text(plan["goal"]), "",
+             "Selected move: " + markdown_text(move["id"] + ": " + move["title"]), "",
+             "Hypothesis: " + markdown_text(move["experiment"]["hypothesis"]), "",
+             "Decision: " + timeline["decision"], "",
+             "Stop reasons: " + markdown_text(", ".join(timeline["reasons"]) or "None declared; human review remains required."), "",
+             "First stop checkpoint: " + str(timeline["first_stop_checkpoint"]), "",
+             "## Measurement coverage", ""]
+    for key, value in timeline["measurement_summary"].items():
+        lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(value)])
+    for row, observation in zip(timeline["checkpoints"], observations):
+        lines.extend(["", "## Checkpoint " + str(row["checkpoint"]), "",
+                      "After earlier stop: " + str(row["after_stop"]), ""])
+        for key in ("elapsed_hours", "active_minutes", "stop_triggered", "consent_confirmed", "notes"):
+            lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(observation[key])])
+        for key, value in row["review"]["measurement"].items():
+            lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(value)])
+    lines.extend(["", "## Declared bounds and rollback", ""])
+    for key, value in limits["bounds"].items():
+        lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(json.dumps(value, sort_keys=True))])
+    lines.extend(["", "Rollback: " + markdown_text(move["experiment"]["rollback"]), "",
+                  "## Declared sources", "", "No source was opened or verified.", ""])
+    for source in plan["sources"]:
+        lines.append("- " + " | ".join(markdown_text(source[key]) for key in ("title", "publisher", "date", "url", "supports") if key in source))
+    if not plan["sources"]:
+        lines.append("None supplied.")
+    lines.extend(["", "## Human learning review", "",
+                  "- What evidence supports or contradicts the hypothesis, including missing measurements?",
+                  "- What alternative explanation could account for the reported change?",
+                  "- Was rollback completed, and were any effects or consent changes left unresolved?",
+                  "- What needs renewed review and actual authority before another separately bounded trial?", "",
+                  "Self-reported checkpoints do not establish causation, completeness, or general effectiveness.", ""])
+    return "\n".join(lines)
+
+
 def portfolio_rows(plan: dict) -> list[dict]:
     selected_move(plan)
     return [{"plan_sha256": plan_digest(plan), "move_id": move["id"], "title": move["title"],
@@ -474,6 +513,10 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    debrief = commands.add_parser("debrief", help="Render observations, stop history, and learning questions as inert Markdown")
+    debrief.add_argument("plan", type=Path)
+    debrief.add_argument("observations", type=Path)
+    debrief.add_argument("--output", type=Path)
     table = commands.add_parser("table", help="Export comparable declared experiment rows without ranking")
     table.add_argument("plan", type=Path)
     table.add_argument("--format", choices=["json", "csv"], default="json")
@@ -544,7 +587,9 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "table":
+        if args.command == "debrief":
+            emit(render_debrief(read_plan(args.plan), read_json_file(args.observations)), args.output)
+        elif args.command == "table":
             plan = read_plan(args.plan)
             emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
         elif args.command == "record":

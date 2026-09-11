@@ -124,6 +124,8 @@ Each timeline row includes decimal-string interval hours, active minutes, and ac
 
 Use `python scripts/moves.py record draft.json observation.json --output checkpoints.json` to begin a checkpoint history. Add `--history checkpoints.json --output next-checkpoints.json` for the next observation. The complete history is validated before a new file is created. Existing history is never rewritten. Reports may retain honest after-stop observations; recording one does not authorize activity after a stop.
 
+## Measurement interpretation
+
 Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings computed to 28 significant digits (or `null` without a measurement), so extreme finite inputs cannot turn into JSON infinity. A fraction of 1 reaches the numeric target, a negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
 
 ## Observation drafts
@@ -138,9 +140,11 @@ python scripts/moves.py observation-draft draft.json --output observation.json
 
 The draft starts with an unavailable measurement, zero elapsed/active time, false consent/stop flags, and empty notes. Replace these fields with actual observations. Empty notes deliberately fail outcome validation; the draft is not recorded evidence or consent confirmation.
 
-## Explicit selection
+## Remaining bounds
 
 Use `python scripts/moves.py limits draft.json checkpoints.json` to review the latest cumulative elapsed hours and active minutes against both declared limits. Remaining amounts and overruns are separate decimal strings, clamped at zero. The complete history is validated and earlier stop reasons persist even when a numeric budget remains. This report provides no continuation allowance.
+
+## Explicit selection
 
 Record your choice in a separate validated revision instead of manually synchronizing the selected ID and action:
 
@@ -150,9 +154,15 @@ python scripts/moves.py select draft.json --move-id move-02 --reason "Fits avail
 
 Selection never ranks or starts a move. It requires a human reason and first step, preserves the input, and changes the plan digest. Create a fresh card and observations for that revision.
 
-## Compare revisions before a new trial
+## Portfolio table
 
 Use `python scripts/moves.py table draft.json --format csv --output portfolio.csv` to compare declared metrics, baselines, targets, start windows, durations, active-time budgets, exposure, and rollback in a spreadsheet. JSON is the default and preserves exact authored strings. CSV uses standard quoting and prefixes all text cells with an apostrophe to prevent spreadsheet formulas; numeric cells remain numeric. Each row retains its plan digest, human-selected flag, and pending human-review state. Original move order is preserved; different metrics cannot be ranked as if their numbers were comparable.
+
+## Experiment debrief
+
+Use `python scripts/moves.py debrief draft.json checkpoints.json --output debrief.md` for a review copy with the selected hypothesis, each reported observation and note, missing measurements, target regressions, earlier stops, remaining bounds, rollback, and declared sources. Authored Markdown and HTML are escaped. The complete history is validated before rendering. Learning questions remain human judgments; the report neither invents conclusions nor records approval, completed rollback, consent verification, or a decision to run another trial.
+
+## Compare revisions before a new trial
 
 ```sh
 python scripts/moves.py compare draft.json revised.json --output changes.json

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Record validated cumulative histories without replacing earlier files.
+- Review exact checkpoint intervals, effort, missing measurements, target regressions, and remaining bounds.
+- Filter declared start and duration windows and identify repeated source support.
+- Export spreadsheet-safe portfolio tables, whole-history handoffs, and inert Markdown debriefs.
+- Preserve pending human authority, persistent stop reasons, and unsigned evidence limits.
+
 ## 0.2.0
 
 - Add compatible bounded experiment plans with an explicit selected move.
