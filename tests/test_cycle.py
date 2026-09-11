@@ -13,6 +13,21 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_portfolio_table_preserves_order_and_quotes_spreadsheet_text(self):
+        self.plan["moves"][0]["title"] = '\n=HYPERLINK("https://example.org")'
+        self.plan["moves"][0]["experiment"]["metric"] = 'Practice, "blocks"\nper day'
+        rows = moves.portfolio_rows(self.plan)
+        self.assertEqual([row["move_id"] for row in rows], [move["id"] for move in self.plan["moves"]])
+        self.assertEqual(sum(row["selected"] for row in rows), 1)
+        parsed = list(csv.DictReader(io.StringIO(moves.portfolio_csv(self.plan))))
+        self.assertEqual(len(parsed), 5)
+        self.assertEqual(parsed[0]["title"], "'" + rows[0]["title"])
+        self.assertEqual(parsed[0]["metric"], "'" + rows[0]["metric"])
+        self.assertEqual(parsed[0]["baseline"], "0")
+        self.assertEqual(rows[0]["review_state"], "human_review_required")
+        with self.assertRaises(ValueError):
+            moves.portfolio_rows(fixtures.example())
+
     def test_sources_identify_repeated_citations_without_merging_distinct_paths(self):
         self.plan["sources"] = [{"title": "Synthetic language source", "url": url, "publisher": publisher,
                                   "supports": "Practice hypothesis", "date": "2026-09-10"}

@@ -150,6 +150,8 @@ Selection never ranks or starts a move. It requires a human reason and first ste
 
 ## Compare revisions before a new trial
 
+Use `python scripts/moves.py table draft.json --format csv --output portfolio.csv` to compare declared metrics, baselines, targets, start windows, durations, active-time budgets, exposure, and rollback in a spreadsheet. JSON is the default and preserves exact authored strings. CSV uses standard quoting and prefixes all text cells with an apostrophe to prevent spreadsheet formulas; numeric cells remain numeric. Each row retains its plan digest, human-selected flag, and pending human-review state. Original move order is preserved; different metrics cannot be ranked as if their numbers were comparable.
+
 ```sh
 python scripts/moves.py compare draft.json revised.json --output changes.json
 ```

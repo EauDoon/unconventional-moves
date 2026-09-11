@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import html
 import hashlib
 import json
@@ -378,6 +380,25 @@ def review_timeline(plan: dict, observations: object) -> dict:
             "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
 
 
+def portfolio_rows(plan: dict) -> list[dict]:
+    selected_move(plan)
+    return [{"plan_sha256": plan_digest(plan), "move_id": move["id"], "title": move["title"],
+             "selected": move["id"] == plan["selected_move_id"], "mechanism": move["mechanism"],
+             **{key: move["experiment"][key] for key in ("metric", "baseline", "target", "direction",
+                 "start_within_hours", "duration_hours", "max_minutes", "exposure", "rollback")},
+             "review_state": "human_review_required"} for move in plan["moves"]]
+
+
+def portfolio_csv(plan: dict) -> str:
+    rows = portfolio_rows(plan)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]), lineterminator="\n")
+    writer.writeheader()
+    # Spreadsheet text markers keep authored cells inert, including multiline formulas.
+    writer.writerows({key: "'" + value if isinstance(value, str) else value for key, value in row.items()} for row in rows)
+    return output.getvalue()
+
+
 def review_limits(plan: dict, observations: object) -> dict:
     timeline = review_timeline(plan, observations)
     experiment = selected_move(plan)["experiment"]
@@ -433,6 +454,10 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    table = commands.add_parser("table", help="Export comparable declared experiment rows without ranking")
+    table.add_argument("plan", type=Path)
+    table.add_argument("--format", choices=["json", "csv"], default="json")
+    table.add_argument("--output", type=Path)
     record = commands.add_parser("record", help="Append an observation to a new validated checkpoint file")
     record.add_argument("plan", type=Path)
     record.add_argument("observation", type=Path)
@@ -497,7 +522,10 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "record":
+        if args.command == "table":
+            plan = read_plan(args.plan)
+            emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
+        elif args.command == "record":
             result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
                                        read_json_file(args.history) if args.history else None)
             emit(json.dumps(result, indent=2) + "\n", args.output)
