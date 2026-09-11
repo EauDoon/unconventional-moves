@@ -13,6 +13,28 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_whole_timeline_handoff_preserves_stops_and_detects_partial_tampering(self):
+        first = {**self.first, "stop_triggered": True}
+        bundle = moves.timeline_handoff(self.plan, [first, self.second])
+        result = moves.verify_handoff(json.loads(json.dumps(bundle)))
+        self.assertEqual(result["checkpoint_count"], 2)
+        self.assertTrue(result["human_review_required"])
+        self.assertEqual(bundle["timeline_review"]["decision"], "stop_and_review")
+        for field in ("observations", "timeline_review", "observations_sha256"):
+            bad = copy.deepcopy(bundle)
+            if field == "observations":
+                bad[field][0]["notes"] = "Altered synthetic note"
+            elif field == "timeline_review":
+                bad[field]["decision"] = "continue"
+            else:
+                bad[field] = "wrong"
+            with self.assertRaises(ValueError):
+                moves.verify_handoff(bad)
+        self.assertTrue(moves.verify_handoff(moves.handoff_bundle(self.plan, self.first))["consistent"])
+        oversized = {**self.first, "notes": "x" * moves.MAX_PLAN_BYTES}
+        with self.assertRaisesRegex(ValueError, "byte limit"):
+            moves.timeline_handoff(self.plan, [oversized])
+
     def test_portfolio_table_preserves_order_and_quotes_spreadsheet_text(self):
         self.plan["moves"][0]["title"] = '\n=HYPERLINK("https://example.org")'
         self.plan["moves"][0]["experiment"]["metric"] = 'Practice, "blocks"\nper day'

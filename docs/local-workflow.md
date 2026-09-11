@@ -66,6 +66,8 @@ python scripts/moves.py verify-handoff handoff.json
 
 Omit `--observation` for a plan-only handoff. The bundle contains the full plan, its digest, review/card, and optional raw observation plus recomputed outcome review. Verification validates the plan and observation and recomputes every derived field. It detects accidental or partial tampering, not authorship or an attacker who rewrites a consistent unsigned bundle. All human checks remain pending. The actual formatted bundle must fit the same 1 MB JSON input bound, allowing a write/read roundtrip. Output files are never overwritten.
 
+Use `handoff draft.json --timeline checkpoints.json --output history-handoff.json` to include the entire supplied cumulative history in a version 0.2 handoff. `--timeline` and `--observation` are mutually exclusive. `verify-handoff` accepts both versions and recomputes the timeline review plus an observation digest that covers notes as well as numbers. Earlier stops cannot be hidden by only exporting the latest derived review. The tool cannot detect omitted historical records or a fully rewritten consistent unsigned bundle, so reviewers must still establish completeness themselves.
+
 ## Printable card
 
 Export a focused printable card with all declared experiment bounds, rollback, stop condition, digest, and unchecked human review checklist:

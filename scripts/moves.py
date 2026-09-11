@@ -260,6 +260,16 @@ def handoff_bundle(plan: dict, observation: object = None) -> dict:
 
 
 def verify_handoff(bundle: object) -> dict:
+    if isinstance(bundle, dict) and bundle.get("contract_version") == "unconventional-moves/handoff-v0.2":
+        fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observations", "observations_sha256", "timeline_review"}
+        if set(bundle) != fields or validate_plan_data(bundle["plan"]):
+            raise ValueError("unsupported timeline handoff structure or invalid plan")
+        expected = timeline_handoff(bundle["plan"], bundle["observations"])
+        if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+            raise ValueError("timeline handoff digest or derived review does not match its contents")
+        return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
+                "checkpoint_count": len(bundle["observations"]), "human_review_required": True,
+                "limitation": "Internal consistency only. An unsigned bundle does not authenticate authorship, completeness, factual truth, consent, or approval."}
     fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observation", "outcome_review"}
     if not isinstance(bundle, dict) or set(bundle) != fields or bundle["contract_version"] != "unconventional-moves/handoff-v0.1":
         raise ValueError("unsupported handoff structure")
@@ -271,6 +281,16 @@ def verify_handoff(bundle: object) -> dict:
     return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
             "observation_present": bundle["observation"] is not None, "human_review_required": True,
             "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
+
+
+def timeline_handoff(plan: dict, observations: object) -> dict:
+    bundle = {"contract_version": "unconventional-moves/handoff-v0.2", "plan": plan,
+              "plan_sha256": plan_digest(plan), "card": experiment_card(plan), "review": review_plan(plan),
+              "observations": observations, "observations_sha256": plan_digest({"observations": observations}),
+              "timeline_review": review_timeline(plan, observations)}
+    if len((json.dumps(bundle, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("timeline handoff exceeds the supported JSON byte limit")
+    return bundle
 
 
 def screen_moves(plan: dict, max_minutes: int, exposure: str,
@@ -496,7 +516,9 @@ def main(argv: list[str] | None = None) -> int:
     screen.add_argument("--output", type=Path)
     handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
     handoff.add_argument("plan", type=Path)
-    handoff.add_argument("--observation", type=Path)
+    handoff_data = handoff.add_mutually_exclusive_group()
+    handoff_data.add_argument("--observation", type=Path)
+    handoff_data.add_argument("--timeline", type=Path)
     handoff.add_argument("--output", type=Path, required=True)
     verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
     verify.add_argument("bundle", type=Path)
@@ -533,7 +555,9 @@ def main(argv: list[str] | None = None) -> int:
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
-            result = handoff_bundle(read_plan(args.plan), read_json_file(args.observation) if args.observation else None)
+            plan = read_plan(args.plan)
+            result = timeline_handoff(plan, read_json_file(args.timeline)) if args.timeline else handoff_bundle(
+                plan, read_json_file(args.observation) if args.observation else None)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
             emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
