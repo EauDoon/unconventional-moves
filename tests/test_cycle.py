@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from decimal import Decimal
 
 import test_workflow as fixtures
 import moves
@@ -40,3 +41,13 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertEqual(len(moves.review_timeline(self.plan, [self.first, self.second])["checkpoints"]), 2)
         with self.assertRaises(ValueError):
             moves.review_timeline(self.plan, [self.first, {**self.second, "active_minutes": 8.000001}])
+
+    def test_activity_ledger_distinguishes_idle_and_full_intervals(self):
+        observations = [self.first, self.second, {**self.second, "elapsed_hours": 1}]
+        rows = moves.review_timeline(self.plan, observations)["checkpoints"]
+        self.assertEqual(rows[1]["interval_active_minutes"], "6")
+        self.assertEqual(rows[1]["interval_hours"], "0.1")
+        self.assertEqual(rows[1]["interval_activity_fraction"], "1")
+        self.assertEqual(Decimal(rows[2]["interval_activity_fraction"]), 0)
+        zero = {**self.first, "elapsed_hours": 0, "active_minutes": 0}
+        self.assertIsNone(moves.review_timeline(self.plan, [zero])["checkpoints"][0]["interval_activity_fraction"])

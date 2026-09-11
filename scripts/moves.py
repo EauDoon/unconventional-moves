@@ -335,7 +335,11 @@ def review_timeline(plan: dict, observations: object) -> dict:
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
             first_stop = index
+        interval_hours = Decimal(str(hours)) - Decimal(str(max(0, previous_hours)))
+        interval_minutes = Decimal(str(minutes)) - Decimal(str(max(0, previous_minutes)))
         checkpoints.append({"checkpoint": index, "elapsed_hours": hours, "active_minutes": minutes,
+                            "interval_hours": str(interval_hours), "interval_active_minutes": str(interval_minutes),
+                            "interval_activity_fraction": str(interval_minutes / (interval_hours * 60)) if interval_hours else None,
                             "review": review, "after_stop": first_stop is not None and index > first_stop})
         previous_hours, previous_minutes = hours, minutes
     return {"plan_sha256": plan_digest(plan), "move_id": selected_move(plan)["id"],
