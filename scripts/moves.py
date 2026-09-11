@@ -330,7 +330,7 @@ def review_timeline(plan: dict, observations: object) -> dict:
         hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
         if hours <= previous_hours or minutes < previous_minutes:
             raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
-        if index > 1 and minutes - previous_minutes > (hours - previous_hours) * 60:
+        if index > 1 and Decimal(str(minutes)) - Decimal(str(previous_minutes)) > (Decimal(str(hours)) - Decimal(str(previous_hours))) * 60:
             raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
