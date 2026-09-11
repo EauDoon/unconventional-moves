@@ -345,6 +345,16 @@ def review_timeline(plan: dict, observations: object) -> dict:
             "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
 
 
+def append_checkpoint(plan: dict, observation: object, history: object = None) -> list:
+    if history is not None and not isinstance(history, list):
+        raise ValueError("checkpoint history must be an array")
+    observations = [*(history or []), observation]
+    review_timeline(plan, observations)
+    if len((json.dumps(observations, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("checkpoint history exceeds the supported JSON byte limit")
+    return observations
+
+
 def observation_draft(plan: dict) -> dict:
     move = selected_move(plan)
     return {"contract_version": "unconventional-moves/outcome-v0.1",
@@ -373,6 +383,11 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    record = commands.add_parser("record", help="Append an observation to a new validated checkpoint file")
+    record.add_argument("plan", type=Path)
+    record.add_argument("observation", type=Path)
+    record.add_argument("--history", type=Path)
+    record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
     select = commands.add_parser("select", help="Record a human choice and first step in a new revision")
@@ -426,7 +441,11 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "init":
+        if args.command == "record":
+            result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
+                                       read_json_file(args.history) if args.history else None)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
