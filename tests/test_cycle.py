@@ -13,6 +13,20 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_remaining_bounds_preserve_stops_and_measure_overruns(self):
+        first = {**self.first, "stop_triggered": True}
+        result = moves.review_limits(self.plan, [first, self.second])
+        self.assertEqual(result["bounds"]["active_minutes"]["remaining"], "12")
+        self.assertEqual(result["decision"], "stop_and_review")
+        last = {**self.second, "elapsed_hours": 50, "active_minutes": 21}
+        result = moves.review_limits(self.plan, [first, last])
+        self.assertEqual(result["bounds"]["elapsed_hours"]["overrun"], "2")
+        self.assertEqual(result["bounds"]["active_minutes"]["overrun"], "1")
+        self.assertEqual(result["bounds"]["active_minutes"]["remaining"], "0")
+        self.assertTrue(result["bounds"]["active_minutes"]["limit_reached"])
+        with self.assertRaises(ValueError):
+            moves.review_limits(self.plan, [])
+
     def test_measurement_summary_keeps_gaps_regressions_and_stop_history(self):
         rows = [{**self.first, "elapsed_hours": index, "observed_value": value, "stop_triggered": index == 1}
                 for index, value in enumerate([None, 2, None, 1, 3], 1)]

@@ -134,6 +134,8 @@ The draft starts with an unavailable measurement, zero elapsed/active time, fals
 
 ## Explicit selection
 
+Use `python scripts/moves.py limits draft.json checkpoints.json` to review the latest cumulative elapsed hours and active minutes against both declared limits. Remaining amounts and overruns are separate decimal strings, clamped at zero. The complete history is validated and earlier stop reasons persist even when a numeric budget remains. This report provides no continuation allowance.
+
 Record your choice in a separate validated revision instead of manually synchronizing the selected ID and action:
 
 ```sh

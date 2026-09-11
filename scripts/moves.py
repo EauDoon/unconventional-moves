@@ -359,6 +359,23 @@ def review_timeline(plan: dict, observations: object) -> dict:
             "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
 
 
+def review_limits(plan: dict, observations: object) -> dict:
+    timeline = review_timeline(plan, observations)
+    experiment = selected_move(plan)["experiment"]
+    latest = observations[-1]
+    bounds = {}
+    for reported, declared in (("elapsed_hours", "duration_hours"), ("active_minutes", "max_minutes")):
+        consumed, maximum = Decimal(str(latest[reported])), Decimal(str(experiment[declared]))
+        bounds[reported] = {"declared_limit": experiment[declared], "reported": latest[reported],
+                            "remaining": str(max(Decimal(0), maximum - consumed)),
+                            "overrun": str(max(Decimal(0), consumed - maximum)),
+                            "limit_reached": consumed >= maximum}
+    return {"plan_sha256": timeline["plan_sha256"], "move_id": timeline["move_id"], "bounds": bounds,
+            "decision": timeline["decision"], "reasons": timeline["reasons"],
+            "first_stop_checkpoint": timeline["first_stop_checkpoint"],
+            "limitation": "Unused declared bounds are not permission to continue. Earlier stops, actual consent, and human authority still control."}
+
+
 def append_checkpoint(plan: dict, observation: object, history: object = None) -> list:
     if history is not None and not isinstance(history, list):
         raise ValueError("checkpoint history must be an array")
@@ -417,6 +434,10 @@ def main(argv: list[str] | None = None) -> int:
     timeline.add_argument("plan", type=Path)
     timeline.add_argument("observations", type=Path)
     timeline.add_argument("--output", type=Path)
+    limits = commands.add_parser("limits", help="Review remaining bounds and overruns across checkpoint history")
+    limits.add_argument("plan", type=Path)
+    limits.add_argument("observations", type=Path)
+    limits.add_argument("--output", type=Path)
     sources = commands.add_parser("sources", help="Audit declared source dates without network access")
     sources.add_argument("plan", type=Path)
     sources.add_argument("--as-of", required=True)
@@ -472,6 +493,9 @@ def main(argv: list[str] | None = None) -> int:
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
             result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "limits":
+            result = review_limits(read_plan(args.plan), read_json_file(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
             result = review_timeline(read_plan(args.plan), read_json_file(args.observations))
