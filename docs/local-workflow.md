@@ -118,6 +118,8 @@ python scripts/moves.py timeline draft.json checkpoints.json --output timeline-r
 
 Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Even a small declared overrun of that interval is rejected.
 
+The shared outcome validator also compares cumulative elapsed time in decimal, accepting exactly 1.8 active minutes at 0.03 elapsed hours across outcome, record, timeline, and handoff commands. It rejects actual excess instead of adding a tolerance that could hide it.
+
 Each timeline row includes decimal-string interval hours, active minutes, and activity fraction. The first interval begins at zero; a zero-length initial interval has a `null` fraction. Later idle intervals report zero activity. These describe reported effort, not productivity or an instruction to use the remaining time.
 
 ## Measurement context

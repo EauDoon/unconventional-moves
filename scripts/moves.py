@@ -177,7 +177,7 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             raise ValueError(f"outcome {field} must be boolean")
     if not isinstance(outcome["notes"], str) or not outcome["notes"].strip():
         raise ValueError("outcome notes must describe the observation and limitations")
-    if outcome["active_minutes"] > outcome["elapsed_hours"] * 60:
+    if Decimal(str(outcome["active_minutes"])) > Decimal(str(outcome["elapsed_hours"])) * 60:
         raise ValueError("outcome active minutes cannot exceed elapsed time")
     experiment = move["experiment"]
     reasons = []

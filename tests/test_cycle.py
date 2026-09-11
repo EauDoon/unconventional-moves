@@ -13,6 +13,14 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_outcome_exact_decimal_elapsed_time_is_shared_by_all_review_paths(self):
+        observation = {**self.first, "elapsed_hours": 0.03, "active_minutes": 1.8}
+        self.assertEqual(moves.evaluate_outcome(self.plan, observation)["decision"], "review_observation")
+        self.assertTrue(moves.verify_handoff(moves.handoff_bundle(self.plan, observation))["consistent"])
+        self.assertEqual(len(moves.append_checkpoint(self.plan, observation)), 1)
+        with self.assertRaises(ValueError):
+            moves.evaluate_outcome(self.plan, {**observation, "active_minutes": 1.800001})
+
     def test_debrief_includes_evidence_and_escapes_authored_markup(self):
         first = {**self.first, "stop_triggered": True, "notes": '<script>synthetic</script> [link](https://example.org)'}
         rendered = moves.render_debrief(self.plan, [first, self.second])
