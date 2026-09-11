@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import html
 import hashlib
 import json
@@ -12,6 +14,7 @@ import sys
 from pathlib import Path
 from decimal import Decimal, localcontext
 from datetime import date
+from urllib.parse import urlsplit
 
 try:
     from .validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
@@ -174,7 +177,7 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             raise ValueError(f"outcome {field} must be boolean")
     if not isinstance(outcome["notes"], str) or not outcome["notes"].strip():
         raise ValueError("outcome notes must describe the observation and limitations")
-    if outcome["active_minutes"] > outcome["elapsed_hours"] * 60:
+    if Decimal(str(outcome["active_minutes"])) > Decimal(str(outcome["elapsed_hours"])) * 60:
         raise ValueError("outcome active minutes cannot exceed elapsed time")
     experiment = move["experiment"]
     reasons = []
@@ -257,6 +260,16 @@ def handoff_bundle(plan: dict, observation: object = None) -> dict:
 
 
 def verify_handoff(bundle: object) -> dict:
+    if isinstance(bundle, dict) and bundle.get("contract_version") == "unconventional-moves/handoff-v0.2":
+        fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observations", "observations_sha256", "timeline_review"}
+        if set(bundle) != fields or validate_plan_data(bundle["plan"]):
+            raise ValueError("unsupported timeline handoff structure or invalid plan")
+        expected = timeline_handoff(bundle["plan"], bundle["observations"])
+        if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+            raise ValueError("timeline handoff digest or derived review does not match its contents")
+        return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
+                "checkpoint_count": len(bundle["observations"]), "human_review_required": True,
+                "limitation": "Internal consistency only. An unsigned bundle does not authenticate authorship, completeness, factual truth, consent, or approval."}
     fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observation", "outcome_review"}
     if not isinstance(bundle, dict) or set(bundle) != fields or bundle["contract_version"] != "unconventional-moves/handoff-v0.1":
         raise ValueError("unsupported handoff structure")
@@ -270,12 +283,26 @@ def verify_handoff(bundle: object) -> dict:
             "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
 
 
-def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
+def timeline_handoff(plan: dict, observations: object) -> dict:
+    bundle = {"contract_version": "unconventional-moves/handoff-v0.2", "plan": plan,
+              "plan_sha256": plan_digest(plan), "card": experiment_card(plan), "review": review_plan(plan),
+              "observations": observations, "observations_sha256": plan_digest({"observations": observations}),
+              "timeline_review": review_timeline(plan, observations)}
+    if len((json.dumps(bundle, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("timeline handoff exceeds the supported JSON byte limit")
+    return bundle
+
+
+def screen_moves(plan: dict, max_minutes: int, exposure: str,
+                 max_start_hours: int | None = None, max_duration_hours: int | None = None) -> dict:
     selected_move(plan)
     if type(max_minutes) is not int or not 1 <= max_minutes <= 2880:
         raise ValueError("maximum active minutes must be an integer from 1 to 2880")
     if exposure not in {"self_only", "consenting_participants"}:
         raise ValueError("unsupported exposure ceiling")
+    for value, minimum in ((max_start_hours, 0), (max_duration_hours, 1)):
+        if value is not None and (type(value) is not int or not minimum <= value <= 48):
+            raise ValueError("start and duration ceilings must be integer hours within the supported 48-hour bounds")
     fits, excluded = [], []
     for move in plan["moves"]:
         experiment, reasons = move["experiment"], []
@@ -283,11 +310,16 @@ def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
             reasons.append("active_time_exceeds_ceiling")
         if exposure == "self_only" and experiment["exposure"] != "self_only":
             reasons.append("participants_outside_ceiling")
+        if max_start_hours is not None and experiment["start_within_hours"] > max_start_hours:
+            reasons.append("start_window_exceeds_ceiling")
+        if max_duration_hours is not None and experiment["duration_hours"] > max_duration_hours:
+            reasons.append("duration_exceeds_ceiling")
         if reasons:
             excluded.append({"move_id": move["id"], "reasons": reasons})
         else:
             fits.append(move["id"])
     return {"plan_sha256": plan_digest(plan), "max_minutes": max_minutes, "exposure_ceiling": exposure,
+            "max_start_hours": max_start_hours, "max_duration_hours": max_duration_hours,
             "matching_move_ids": fits, "excluded": excluded, "selected_move_id": plan["selected_move_id"],
             "selected_within_constraints": plan["selected_move_id"] in fits,
             "limitation": "Original order retained. Declared constraints only; no ranking, consent verification, safety certification, or automatic selection."}
@@ -303,8 +335,14 @@ def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
     reference = iso_date(as_of)
     if type(max_age_days) is not int or not 0 <= max_age_days <= 36500:
         raise ValueError("max age must be an integer from 0 to 36500 days")
-    sources = []
+    sources, urls, publishers = [], {}, {}
     for index, source in enumerate(plan["sources"], 1):
+        parsed = urlsplit(source["url"])
+        url_key = parsed._replace(netloc=parsed.netloc.lower(), fragment="").geturl()
+        urls.setdefault(url_key, []).append(index)
+        publisher_key = " ".join(source.get("publisher", "").casefold().split())
+        if publisher_key:
+            publishers.setdefault(publisher_key, []).append(index)
         declared = source.get("date", "")
         age, status = None, "date_missing"
         if declared:
@@ -316,6 +354,9 @@ def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
         sources.append({"source": index, "title": source["title"], "declared_date": declared or None,
                         "age_days": age, "status": status})
     return {"plan_sha256": plan_digest(plan), "as_of": as_of, "max_age_days": max_age_days,
+            "repeated_url_groups": [indices for indices in urls.values() if len(indices) > 1],
+            "shared_declared_publisher_groups": [indices for indices in publishers.values() if len(indices) > 1],
+            "independence_review_required": any(len(indices) > 1 for indices in [*urls.values(), *publishers.values()]),
             "sources": sources, "sources_absent": not sources, "human_verification_required": True,
             "limitation": "Dates are user-declared. No URL was opened and no publisher, claim, relevance, or actual currency was verified."}
 
@@ -330,19 +371,118 @@ def review_timeline(plan: dict, observations: object) -> dict:
         hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
         if hours <= previous_hours or minutes < previous_minutes:
             raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
-        if index > 1 and minutes - previous_minutes > (hours - previous_hours) * 60:
+        if index > 1 and Decimal(str(minutes)) - Decimal(str(previous_minutes)) > (Decimal(str(hours)) - Decimal(str(previous_hours))) * 60:
             raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
             first_stop = index
+        interval_hours = Decimal(str(hours)) - Decimal(str(max(0, previous_hours)))
+        interval_minutes = Decimal(str(minutes)) - Decimal(str(max(0, previous_minutes)))
         checkpoints.append({"checkpoint": index, "elapsed_hours": hours, "active_minutes": minutes,
+                            "interval_hours": str(interval_hours), "interval_active_minutes": str(interval_minutes),
+                            "interval_activity_fraction": str(interval_minutes / (interval_hours * 60)) if interval_hours else None,
                             "review": review, "after_stop": first_stop is not None and index > first_stop})
         previous_hours, previous_minutes = hours, minutes
+    measured = [row for row in checkpoints if row["review"]["target_met"] is not None]
+    attained = [row["checkpoint"] for row in measured if row["review"]["target_met"]]
+    first_target = attained[0] if attained else None
+    lost = [row["checkpoint"] for row in measured
+            if first_target is not None and row["checkpoint"] > first_target and not row["review"]["target_met"]]
     return {"plan_sha256": plan_digest(plan), "move_id": selected_move(plan)["id"],
+            "measurement_summary": {"measured_checkpoints": len(measured),
+                "missing_checkpoints": [row["checkpoint"] for row in checkpoints if row["review"]["target_met"] is None],
+                "first_target_checkpoint": first_target, "target_lost_checkpoints": lost,
+                "latest_checkpoint_target_met": checkpoints[-1]["review"]["target_met"],
+                "first_target_after_stop": first_target is not None and first_stop is not None and first_target > first_stop},
             "checkpoints": checkpoints, "first_stop_checkpoint": first_stop,
             "decision": "stop_and_review" if stop_reasons else "review_observations",
             "reasons": sorted(stop_reasons), "observations_after_stop": first_stop is not None and first_stop < len(observations),
             "limitation": "Cumulative self-reports only. Earlier stop conditions remain active; later entries do not authorize continuation."}
+
+
+def render_debrief(plan: dict, observations: object) -> str:
+    timeline = review_timeline(plan, observations)
+    limits = review_limits(plan, observations)
+    move = selected_move(plan)
+    lines = ["# Experiment debrief", "", "Human review required. No continuation or expansion is authorized.", "",
+             "Plan SHA-256: " + timeline["plan_sha256"], "", "Goal: " + markdown_text(plan["goal"]), "",
+             "Selected move: " + markdown_text(move["id"] + ": " + move["title"]), "",
+             "Hypothesis: " + markdown_text(move["experiment"]["hypothesis"]), "",
+             "Decision: " + timeline["decision"], "",
+             "Stop reasons: " + markdown_text(", ".join(timeline["reasons"]) or "None declared; human review remains required."), "",
+             "First stop checkpoint: " + str(timeline["first_stop_checkpoint"]), "",
+             "## Measurement coverage", ""]
+    for key, value in timeline["measurement_summary"].items():
+        lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(value)])
+    for row, observation in zip(timeline["checkpoints"], observations):
+        lines.extend(["", "## Checkpoint " + str(row["checkpoint"]), "",
+                      "After earlier stop: " + str(row["after_stop"]), ""])
+        for key in ("elapsed_hours", "active_minutes", "stop_triggered", "consent_confirmed", "notes"):
+            lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(observation[key])])
+        for key, value in row["review"]["measurement"].items():
+            lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(value)])
+    lines.extend(["", "## Declared bounds and rollback", ""])
+    for key, value in limits["bounds"].items():
+        lines.extend(["- " + key.replace("_", " ") + ": " + markdown_text(json.dumps(value, sort_keys=True))])
+    lines.extend(["", "Rollback: " + markdown_text(move["experiment"]["rollback"]), "",
+                  "## Declared sources", "", "No source was opened or verified.", ""])
+    for source in plan["sources"]:
+        lines.append("- " + " | ".join(markdown_text(source[key]) for key in ("title", "publisher", "date", "url", "supports") if key in source))
+    if not plan["sources"]:
+        lines.append("None supplied.")
+    lines.extend(["", "## Human learning review", "",
+                  "- What evidence supports or contradicts the hypothesis, including missing measurements?",
+                  "- What alternative explanation could account for the reported change?",
+                  "- Was rollback completed, and were any effects or consent changes left unresolved?",
+                  "- What needs renewed review and actual authority before another separately bounded trial?", "",
+                  "Self-reported checkpoints do not establish causation, completeness, or general effectiveness.", ""])
+    return "\n".join(lines)
+
+
+def portfolio_rows(plan: dict) -> list[dict]:
+    selected_move(plan)
+    return [{"plan_sha256": plan_digest(plan), "move_id": move["id"], "title": move["title"],
+             "selected": move["id"] == plan["selected_move_id"], "mechanism": move["mechanism"],
+             **{key: move["experiment"][key] for key in ("metric", "baseline", "target", "direction",
+                 "start_within_hours", "duration_hours", "max_minutes", "exposure", "rollback")},
+             "review_state": "human_review_required"} for move in plan["moves"]]
+
+
+def portfolio_csv(plan: dict) -> str:
+    rows = portfolio_rows(plan)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]), lineterminator="\n")
+    writer.writeheader()
+    # Spreadsheet text markers keep authored cells inert, including multiline formulas.
+    writer.writerows({key: "'" + value if isinstance(value, str) else value for key, value in row.items()} for row in rows)
+    return output.getvalue()
+
+
+def review_limits(plan: dict, observations: object) -> dict:
+    timeline = review_timeline(plan, observations)
+    experiment = selected_move(plan)["experiment"]
+    latest = observations[-1]
+    bounds = {}
+    for reported, declared in (("elapsed_hours", "duration_hours"), ("active_minutes", "max_minutes")):
+        consumed, maximum = Decimal(str(latest[reported])), Decimal(str(experiment[declared]))
+        bounds[reported] = {"declared_limit": experiment[declared], "reported": latest[reported],
+                            "remaining": str(max(Decimal(0), maximum - consumed)),
+                            "overrun": str(max(Decimal(0), consumed - maximum)),
+                            "limit_reached": consumed >= maximum}
+    return {"plan_sha256": timeline["plan_sha256"], "move_id": timeline["move_id"], "bounds": bounds,
+            "decision": timeline["decision"], "reasons": timeline["reasons"],
+            "first_stop_checkpoint": timeline["first_stop_checkpoint"],
+            "limitation": "Unused declared bounds are not permission to continue. Earlier stops, actual consent, and human authority still control."}
+
+
+def append_checkpoint(plan: dict, observation: object, history: object) -> list:
+    if not isinstance(history, list):
+        raise ValueError("checkpoint history must be an array")
+    observations = [*history, observation]
+    review_timeline(plan, observations)
+    if len((json.dumps(observations, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("checkpoint history exceeds the supported JSON byte limit")
+    return observations
 
 
 def observation_draft(plan: dict) -> dict:
@@ -373,6 +513,19 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    debrief = commands.add_parser("debrief", help="Render observations, stop history, and learning questions as inert Markdown")
+    debrief.add_argument("plan", type=Path)
+    debrief.add_argument("observations", type=Path)
+    debrief.add_argument("--output", type=Path)
+    table = commands.add_parser("table", help="Export comparable declared experiment rows without ranking")
+    table.add_argument("plan", type=Path)
+    table.add_argument("--format", choices=["json", "csv"], default="json")
+    table.add_argument("--output", type=Path)
+    record = commands.add_parser("record", help="Append an observation to a new validated checkpoint file")
+    record.add_argument("plan", type=Path)
+    record.add_argument("observation", type=Path)
+    record.add_argument("--history", type=Path)
+    record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
     select = commands.add_parser("select", help="Record a human choice and first step in a new revision")
@@ -388,6 +541,10 @@ def main(argv: list[str] | None = None) -> int:
     timeline.add_argument("plan", type=Path)
     timeline.add_argument("observations", type=Path)
     timeline.add_argument("--output", type=Path)
+    limits = commands.add_parser("limits", help="Review remaining bounds and overruns across checkpoint history")
+    limits.add_argument("plan", type=Path)
+    limits.add_argument("observations", type=Path)
+    limits.add_argument("--output", type=Path)
     sources = commands.add_parser("sources", help="Audit declared source dates without network access")
     sources.add_argument("plan", type=Path)
     sources.add_argument("--as-of", required=True)
@@ -397,10 +554,14 @@ def main(argv: list[str] | None = None) -> int:
     screen.add_argument("plan", type=Path)
     screen.add_argument("--max-minutes", type=int, required=True)
     screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
+    screen.add_argument("--max-start-hours", type=int)
+    screen.add_argument("--max-duration-hours", type=int)
     screen.add_argument("--output", type=Path)
     handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
     handoff.add_argument("plan", type=Path)
-    handoff.add_argument("--observation", type=Path)
+    handoff_data = handoff.add_mutually_exclusive_group()
+    handoff_data.add_argument("--observation", type=Path)
+    handoff_data.add_argument("--timeline", type=Path)
     handoff.add_argument("--output", type=Path, required=True)
     verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
     verify.add_argument("bundle", type=Path)
@@ -426,19 +587,34 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "init":
+        if args.command == "debrief":
+            emit(render_debrief(read_plan(args.plan), read_json_file(args.observations)), args.output)
+        elif args.command == "table":
+            plan = read_plan(args.plan)
+            emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
+        elif args.command == "record":
+            result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
+                                       read_json_file(args.history) if args.history else [])
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
-            result = handoff_bundle(read_plan(args.plan), read_json_file(args.observation) if args.observation else None)
+            plan = read_plan(args.plan)
+            result = timeline_handoff(plan, read_json_file(args.timeline)) if args.timeline else handoff_bundle(
+                plan, read_json_file(args.observation) if args.observation else None)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
             emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
         elif args.command == "screen":
-            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure)
+            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure,
+                                  args.max_start_hours, args.max_duration_hours)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
             result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "limits":
+            result = review_limits(read_plan(args.plan), read_json_file(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
             result = review_timeline(read_plan(args.plan), read_json_file(args.observations))

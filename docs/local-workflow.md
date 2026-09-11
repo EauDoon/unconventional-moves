@@ -66,6 +66,8 @@ python scripts/moves.py verify-handoff handoff.json
 
 Omit `--observation` for a plan-only handoff. The bundle contains the full plan, its digest, review/card, and optional raw observation plus recomputed outcome review. Verification validates the plan and observation and recomputes every derived field. It detects accidental or partial tampering, not authorship or an attacker who rewrites a consistent unsigned bundle. All human checks remain pending. The actual formatted bundle must fit the same 1 MB JSON input bound, allowing a write/read roundtrip. Output files are never overwritten.
 
+Use `handoff draft.json --timeline checkpoints.json --output history-handoff.json` to include the entire supplied cumulative history in a version 0.2 handoff. `--timeline` and `--observation` are mutually exclusive. `verify-handoff` accepts both versions and recomputes the timeline review plus an observation digest that covers notes as well as numbers. Earlier stops cannot be hidden by only exporting the latest derived review. The tool cannot detect omitted historical records or a fully rewritten consistent unsigned bundle, so reviewers must still establish completeness themselves.
+
 ## Printable card
 
 Export a focused printable card with all declared experiment bounds, rollback, stop condition, digest, and unchecked human review checklist:
@@ -90,6 +92,8 @@ python scripts/moves.py screen draft.json --max-minutes 20 --exposure self_only
 
 The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to explicitly record a human choice after review.
 
+Add `--max-start-hours 12 --max-duration-hours 24` to exclude declared start windows or experiment durations beyond your available window. A start ceiling of zero accepts only immediate-start declarations. These optional filters leave older command behavior intact and do not reschedule a move or prove that its latest start is feasible.
+
 ## Declared source dates
 
 Audit declared source dates against a reference date and age threshold you choose:
@@ -99,6 +103,8 @@ python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 ```
 
 Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
+
+The source audit also groups repeated URLs (ignoring fragments and host case) and equal declared publisher names (ignoring case and repeated whitespace). Groups use the original one-based source positions and preserve every citation. Different URL paths and queries remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
 
 ## Cumulative checkpoints
 
@@ -110,11 +116,25 @@ python scripts/moves.py timeline draft.json checkpoints.json --output timeline-r
 
 `checkpoints.json` is an array of 1 to 100 completed outcome records in increasing elapsed-hour order. Active minutes are cumulative and cannot decrease. Each record must match the current digest and move. Any earlier stop reason remains in the final decision, even if a later record clears its flag. Entries recorded after the first stop are identified for human review. The report does not schedule, combine independent trials, or authorize continued activity.
 
+Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Even a small declared overrun of that interval is rejected.
+
+The shared outcome validator also compares cumulative elapsed time in decimal, accepting exactly 1.8 active minutes at 0.03 elapsed hours across outcome, record, timeline, and handoff commands. It rejects actual excess instead of adding a tolerance that could hide it.
+
+Each timeline row includes decimal-string interval hours, active minutes, and activity fraction. The first interval begins at zero; a zero-length initial interval has a `null` fraction. Later idle intervals report zero activity. These describe reported effort, not productivity or an instruction to use the remaining time.
+
 ## Measurement context
+
+Use `python scripts/moves.py record draft.json observation.json --output checkpoints.json` to begin a checkpoint history. Add `--history checkpoints.json --output next-checkpoints.json` for the next observation. The complete history is validated before a new file is created. Existing history is never rewritten. Reports may retain honest after-stop observations; recording one does not authorize activity after a stop.
+
+An explicitly supplied history must be a JSON array, including `[]` for an intentionally empty history. `null` is rejected instead of silently starting over.
+
+## Measurement interpretation
 
 Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings computed to 28 significant digits (or `null` without a measurement), so extreme finite inputs cannot turn into JSON infinity. A fraction of 1 reaches the numeric target, a negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
 
 ## Observation drafts
+
+Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
 
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 
@@ -123,6 +143,10 @@ python scripts/moves.py observation-draft draft.json --output observation.json
 ```
 
 The draft starts with an unavailable measurement, zero elapsed/active time, false consent/stop flags, and empty notes. Replace these fields with actual observations. Empty notes deliberately fail outcome validation; the draft is not recorded evidence or consent confirmation.
+
+## Remaining bounds
+
+Use `python scripts/moves.py limits draft.json checkpoints.json` to review the latest cumulative elapsed hours and active minutes against both declared limits. Remaining amounts and overruns are separate decimal strings, clamped at zero. The complete history is validated and earlier stop reasons persist even when a numeric budget remains. This report provides no continuation allowance.
 
 ## Explicit selection
 
@@ -133,6 +157,14 @@ python scripts/moves.py select draft.json --move-id move-02 --reason "Fits avail
 ```
 
 Selection never ranks or starts a move. It requires a human reason and first step, preserves the input, and changes the plan digest. Create a fresh card and observations for that revision.
+
+## Portfolio table
+
+Use `python scripts/moves.py table draft.json --format csv --output portfolio.csv` to compare declared metrics, baselines, targets, start windows, durations, active-time budgets, exposure, and rollback in a spreadsheet. JSON is the default and preserves exact authored strings. CSV uses standard quoting and prefixes all text cells with an apostrophe to prevent spreadsheet formulas; numeric cells remain numeric. Each row retains its plan digest, human-selected flag, and pending human-review state. Original move order is preserved; different metrics cannot be ranked as if their numbers were comparable.
+
+## Experiment debrief
+
+Use `python scripts/moves.py debrief draft.json checkpoints.json --output debrief.md` for a review copy with the selected hypothesis, each reported observation and note, missing measurements, target regressions, earlier stops, remaining bounds, rollback, and declared sources. Authored Markdown and HTML are escaped. The complete history is validated before rendering. Learning questions remain human judgments; the report neither invents conclusions nor records approval, completed rollback, consent verification, or a decision to run another trial.
 
 ## Compare revisions before a new trial
 

@@ -92,6 +92,8 @@ The optional Python CLI adds a complete local workflow without model calls, acco
 
 You can now record an explicit selection, draft correctly bound observations, review cumulative checkpoints, screen declared time/exposure limits, and audit declared source dates. Printable cards, self-contained JSON handoffs, and an offline HTML report make human review portable. Handoff verification checks internal consistency; it does not authenticate claims, consent, or approval.
 
+For follow-through, record checkpoints into a new validated history, inspect activity intervals and missing or regressing measurements, review remaining bounds, and export an experiment debrief. Whole-history handoffs preserve earlier stop reasons. Portfolio CSV tables and optional start/duration filters help compare declared experiment scope without automatically ranking or selecting a move.
+
 ```sh
 python scripts/moves.py init --output draft.json
 python scripts/moves.py review draft.json
