@@ -8,6 +8,7 @@ import json
 import math
 import re
 import sys
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -31,8 +32,28 @@ UNSAFE = re.compile(
     r"evad(?:e|es|ed|ing)\s+(?:the\s+)?(?:law|consent))\b"
 )
 MAX_PLAN_BYTES = 1_000_000
+MAX_JSON_DEPTH = 64
 TOP_LEVEL_FIELDS = {"contract_version", "goal", "high_stakes", "moves", "prioritized_action", "sources"}
 SOURCE_FIELDS = {"title", "publisher", "date", "url", "supports"}
+
+
+def contains_unsafe_action(text: str, pattern=UNSAFE) -> bool:
+    """Conservative lexical screen, not a judgment of intent or safety.
+
+    Recognize direct prevention clauses only. Check each harmful match and
+    each coordinated clause, never exempt a whole string because it says 'not'.
+    Ambiguous wording still requires rewriting and human review.
+    """
+    for clause in re.split(r'[.!?;\n]|\b(?:and|but|then|however|instead)\b', text, flags=re.I):
+        for match in pattern.finditer(clause):
+            prefix = clause[:match.start()].strip().lstrip('"\'')
+            prefix = re.sub(r'^review the warning:\s*["\']?', '', prefix, flags=re.I)
+            conditional = re.search(r'\b(?:unless|except|until|otherwise|if|when|provided|once|after|before|without)\b',
+                                    clause[match.end():], re.I)
+            if not conditional and re.fullmatch(r'do not|never|prevent|avoid|stop if|stop when|pause if', prefix, re.I):
+                continue
+            return True
+    return False
 
 
 def _valid_source_url(value: str) -> bool:
@@ -74,9 +95,23 @@ def load_plan_json(raw: str) -> object:
     if len(raw.encode("utf-8")) > MAX_PLAN_BYTES:
         raise ValueError(f"plan exceeds {MAX_PLAN_BYTES} bytes")
     try:
-        return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+        data = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
     except RecursionError as exc:
         raise ValueError("JSON nesting is too deep") from exc
+    pending = [(data, 0)]
+    while pending:
+        value, depth = pending.pop()
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError("JSON nesting is too deep")
+        if isinstance(value, str):
+            value.encode("utf-8")  # Reject escaped unpaired surrogates too.
+        elif isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("JSON numbers must be finite")
+        elif isinstance(value, dict):
+            pending.extend((item, depth + 1) for pair in value.items() for item in pair)
+        elif isinstance(value, list):
+            pending.extend((item, depth + 1) for item in value)
+    return data
 
 
 def read_json_file(path: Path) -> object:
@@ -113,7 +148,8 @@ def validate_experiment(value: object, label: str) -> list[str]:
     if value.get("exposure") not in ("self_only", "consenting_participants"):
         failures.append(f"{label} experiment exposure must be self_only or consenting_participants")
     if not failures:
-        if (value["target"] <= value["baseline"] if value["direction"] == "increase" else value["target"] >= value["baseline"]):
+        baseline, target = (Decimal(str(value[field])) for field in ("baseline", "target"))
+        if (target <= baseline if value["direction"] == "increase" else target >= baseline):
             failures.append(f"{label} experiment target must improve on baseline in the stated direction")
         if value["max_minutes"] > value["duration_hours"] * 60:
             failures.append(f"{label} experiment max_minutes exceeds duration")
@@ -154,7 +190,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
             ids.append(move_id)
         for field in ("concrete_move", "test_48h", "success_signal", "stop_condition"):
             value = move.get(field, "")
-            if isinstance(value, str) and UNSAFE.search(value):
+            if isinstance(value, str) and contains_unsafe_action(value):
                 failures.append(f"move {index} contains an unsafe action in {field}")
     if len(ids) != len(set(ids)):
         failures.append("move IDs must be unique")
@@ -165,7 +201,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
     prioritized = data.get("prioritized_action")
     if not isinstance(prioritized, str) or not prioritized.strip():
         failures.append("prioritized_action must be one non-empty string")
-    elif UNSAFE.search(prioritized):
+    elif contains_unsafe_action(prioritized):
         failures.append("prioritized_action contains an unsafe action")
     sources = data.get("sources")
     if not isinstance(sources, list):
@@ -187,7 +223,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         if isinstance(source.get("url"), str) and not _valid_source_url(source["url"]):
             failures.append(f"source {index} URL must use http or https")
     if data.get("high_stakes") is True and not sources:
-        failures.append("high-stakes plan requires at least one current source")
+        failures.append("high-stakes plan requires at least one declared source; currency and support need verification")
     if not isinstance(data.get("high_stakes"), bool):
         failures.append("high_stakes must be boolean")
     return failures

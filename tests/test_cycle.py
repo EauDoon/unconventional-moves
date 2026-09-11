@@ -13,6 +13,31 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_mixed_numeric_types_use_declared_decimal_target_comparisons(self):
+        experiment = self.plan["moves"][0]["experiment"]
+        for baseline, direction, observed, attained in (
+                (0, "increase", 10**100, True),
+                (10**101, "decrease", 10**100 + 1, False)):
+            experiment.update(baseline=baseline, target=1e100, direction=direction)
+            self.assertEqual(fixtures.validate_plan_data(self.plan), [])
+            observation = {**self.first, "observed_value": observed,
+                           "plan_sha256": moves.plan_digest(self.plan)}
+            review = moves.evaluate_outcome(self.plan, observation)
+            self.assertIs(review["target_met"], attained)
+            self.assertTrue(moves.verify_handoff(moves.handoff_bundle(self.plan, observation))["consistent"])
+            self.assertIs(moves.review_timeline(self.plan, [observation])["measurement_summary"]["latest_checkpoint_target_met"], attained)
+
+    def test_withdrawn_consent_remains_a_stop_after_later_confirmation(self):
+        self.plan["moves"][0]["experiment"]["exposure"] = "consenting_participants"
+        first = {**self.first, "plan_sha256": moves.plan_digest(self.plan), "consent_confirmed": False}
+        second = {**self.second, "plan_sha256": moves.plan_digest(self.plan), "consent_confirmed": True}
+        result = moves.review_timeline(self.plan, [first, second])
+        self.assertTrue(result["measurement_summary"]["latest_checkpoint_target_met"])
+        self.assertEqual(result["decision"], "stop_and_review")
+        self.assertIn("consent_not_confirmed", result["reasons"])
+        self.assertTrue(result["checkpoints"][1]["after_stop"])
+        self.assertIn("consent_not_confirmed", moves.review_limits(self.plan, [first, second])["reasons"])
+
     def test_outcome_exact_decimal_elapsed_time_is_shared_by_all_review_paths(self):
         observation = {**self.first, "elapsed_hours": 0.03, "active_minutes": 1.8}
         self.assertEqual(moves.evaluate_outcome(self.plan, observation)["decision"], "review_observation")

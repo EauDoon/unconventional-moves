@@ -1,30 +1,51 @@
 # Contributing
 
-Keep contributions narrow, original, and consistent with the project's safety and epistemic boundaries.
+Keep contributions narrow, original, and consistent with the project's safety
+and evidence boundaries.
 
 ## Content requirements
 
-- Keep the installable skill concise and imperative.
-- Produce five to seven approaches for a valid goal.
-- Give every idea a concrete move, why it is overlooked, and a reversible test that can begin within 48 hours.
-- Give every idea an observable success signal and a concrete stop condition.
-- Vary mechanisms rather than restating one approach.
-- Separate facts, inferences, and speculation.
-- Require current reliable sources and bounded experiments for high-stakes goals.
-- Reject illegal, deceptive, reckless, exploitative, or unsafe ideas.
-- End every valid response with one prioritized action.
-- Include a Sources section for high-stakes output and fail closed when current reliable sources are unavailable.
-- Use synthetic examples only for learning a language, reducing meeting overload, or validating a small product idea.
-- Do not add personal details, employer or client content, local paths, account identifiers, credentials, external assets, runtime dependencies, or copied third-party content.
-- Do not use em dashes in public files.
+- Keep the installable skill concise, imperative, and useful without the CLI.
+- For a normal completed plan, give five to seven feasible, mechanism-distinct
+  moves. Explain limitations or refuse unsafe goals without padding.
+- Separate desired outcome from assumed method, identify the likely bottleneck,
+  and compare the conventional baseline outside the move count.
+- Explain each concrete action, why it could work here, and its failure condition.
+- Make every reversible test startable within 48 hours and capable of changing a
+  decision. Include a hypothesis, observation, success signal, stop, bounds, and
+  rollback in existing fields. Preserve versioned duration constraints.
+- Distinguish supplied facts, checked facts, inference, and speculation. Do not
+  invent measurements to satisfy v0.2; use v0.1 when meaningful inputs are unknown.
+- Require current reliable evidence for high-stakes claims; when unavailable,
+  limit advice to source gathering or non-consequential steps.
+- Reject illegal, deceptive, reckless, exploitative, or unsafe actions. Preserve
+  consent and affected parties' interests without repetitive low-risk boilerplate.
+- Put Sources before the one final prioritized action in prose. Explain that
+  choice against the strongest alternative and name its first concrete step.
+- Use fictional examples across partnership activation, product adoption,
+  distribution, operational efficiency, and personal learning. Clearly label
+  synthetic numeric values and observations. Do not invent real company results.
+- Do not add personal details, employer or client content, local paths, account
+  identifiers, credentials, external assets, runtime dependencies, or copied
+  third-party content. Do not use em dashes in public files.
 
 ## Contribution workflow
 
-1. Explain the behavior being changed and why it belongs in this skill.
-2. Make the smallest coherent change.
-3. Run `python scripts/validate.py`, `python scripts/validate_plan.py examples/example-plan.json`, and `python -m unittest discover -s tests -v`.
-4. Scan the repository for placeholders, disallowed punctuation, private identifiers, local paths, email addresses, and credential-like patterns.
-5. Test with synthetic material from the permitted example topics.
-6. Record limitations or unresolved safety questions with the proposed change.
+1. Reproduce the problem and explain the smallest coherent behavior change.
+2. Freeze a rubric before tuning behavioral instructions. Keep held-out cases
+   separate from tuning. Structural tests do not establish semantic improvement.
+3. Add regression coverage for confirmed defects, then implement the fix.
+4. Run `python scripts/validate.py`, both example plan validators, and
+   `python -m unittest discover -s tests -v`. Use a verified Python interpreter.
+5. Build twice in fresh directories, compare checksums in the same environment,
+   and exercise the extracted package away from the checkout.
+6. Review the diff, trust claims, compatibility, links, privacy, punctuation, and
+   unexpected files. Update bundled references and the package manifest together.
+7. Record actual commands, results, environments, and limitations. Optional
+   model evaluations must record prompts, runtime, outputs, and independent
+   review where available. Report unexecuted behavioral comparisons as NOT RUN.
 
-Product direction, evaluation, review, and acceptance remain with EauDoon. Contributors must disclose material third-party provenance and licensing obligations.
+Product direction, evaluation, review, and acceptance remain with EauDoon.
+Contributors must disclose material third-party provenance and licensing
+obligations. Checks, hashes, source declarations, and selection fields do not
+certify safety, authenticate observations, or approve execution.

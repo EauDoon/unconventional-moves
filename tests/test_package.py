@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.package import (
     MAX_VERSION_LENGTH,
+    files_for,
     version_for,
 )
 
@@ -19,6 +20,45 @@ OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_same_environment_builds_are_identical_and_complete(self):
+        import hashlib
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            archives = []
+            for name in ("first", "second"):
+                output = Path(td) / name
+                result = subprocess.run([sys.executable, str(ROOT / "scripts/package.py"), "--output", str(output)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                archive = next(output.glob("*.zip"))
+                archives.append(archive.read_bytes())
+                self.assertEqual(archive.with_suffix(".zip.sha256").read_text().split()[0],
+                                 hashlib.sha256(archives[-1]).hexdigest())
+                with zipfile.ZipFile(archive) as handle:
+                    prefix = "unconventional-moves-" + version_for(ROOT) + "/"
+                    self.assertEqual(sorted(handle.namelist()),
+                                     sorted(prefix + path.relative_to(ROOT).as_posix() for path in files_for(ROOT)))
+            self.assertEqual(*archives)
+
+    def test_manifest_rejects_nonportable_names_and_symlink_ancestors(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "folder").mkdir()
+            (root / "folder" / "file.txt").write_text("synthetic", encoding="utf-8")
+            manifest = root / "package-manifest.json"
+            manifest.write_text(json.dumps(["folder/file.txt"]), encoding="utf-8")
+            self.assertEqual(len(files_for(root)), 1)
+            for entry in ("folder\\file.txt", "folder/../folder/file.txt", "C:folder/file.txt", "folder/file.txt\x00hidden"):
+                manifest.write_text(json.dumps([entry]), encoding="utf-8")
+                with self.subTest(entry=entry), self.assertRaises(ValueError):
+                    files_for(root)
+            # Simulate a symlink ancestor without requiring Windows symlink privilege.
+            from unittest.mock import patch
+            manifest.write_text(json.dumps(["folder/file.txt"]), encoding="utf-8")
+            with patch.object(Path, "is_symlink", lambda path: path == root / "folder"):
+                with self.assertRaises(ValueError):
+                    files_for(root)
+
     def test_package_version_length_boundary(self):
         self.assertEqual(MAX_VERSION_LENGTH, 64)
         self.assertEqual(len(MAX_LENGTH_VERSION), 64)

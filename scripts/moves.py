@@ -37,8 +37,9 @@ def emit(content: str, output: Path | None) -> None:
         print(content, end="" if content.endswith("\n") else "\n")
     else:
         # Exclusive creation protects existing drafts, symlinks, and input files.
-        with output.open("x", encoding="utf-8", newline="\n") as handle:
-            handle.write(content)
+        encoded = content.encode("utf-8")
+        with output.open("xb") as handle:
+            handle.write(encoded)
 
 
 def review_plan(plan: dict) -> dict:
@@ -86,11 +87,15 @@ def render_plan(plan: dict) -> str:
         if "experiment" in move:
             for field, value in move["experiment"].items():
                 lines.extend(["**Experiment " + field.replace("_", " ") + ":** " + markdown_text(value), ""])
-    lines.extend(["**Prioritized action:** " + markdown_text(plan["prioritized_action"]), "", "## Sources", ""])
+    lines.extend(["## Sources", ""])
     if not plan["sources"]:
         lines.extend(["None supplied. This is not verification of factual claims.", ""])
     for source in plan["sources"]:
         lines.extend(["- " + " | ".join(markdown_text(source[field]) for field in ("title", "publisher", "date", "url", "supports") if field in source)])
+    if "selected_move_id" in plan:
+        lines.extend(["", "**Declared selected move:** " + markdown_text(plan["selected_move_id"]), "",
+                      "Selection records no verified chooser or approval. Check that the free-text priority describes this move; semantic alignment is not validated."])
+    lines.extend(["", "**Prioritized action:** " + markdown_text(plan["prioritized_action"]), ""])
     return "\n".join(lines) + "\n"
 
 
@@ -102,18 +107,22 @@ def render_html(plan: dict) -> str:
     for index, move in enumerate(plan["moves"], 1):
         anchor = "move-" + str(index)
         chosen = move["id"] == selected
-        navigation.append(f'<a href="#{anchor}">{index:02d} {escape(move["title"])}' + (" (selected)" if chosen else "") + '</a>')
+        navigation.append(f'<a href="#{anchor}">{index:02d} {escape(move["title"])}' + (" (declared selection)" if chosen else "") + '</a>')
         fields = "".join(f'<dt>{escape(key.replace("_", " ").title())}</dt><dd>{escape(move[key])}</dd>'
                          for key in ("mechanism", "concrete_move", "why_overlooked", "test_48h", "success_signal", "stop_condition", "evidence_status", "bounds"))
         experiment = ""
         if "experiment" in move:
             rows = "".join(f'<dt>{escape(key.replace("_", " ").title())}</dt><dd>{escape(value)}</dd>' for key, value in move["experiment"].items())
             experiment = '<details open><summary>Declared experiment and rollback</summary><dl>' + rows + '</dl></details>'
-        sections.append(f'<article id="{anchor}"><p class="eyebrow">Approach {index:02d}' + (" / Human-selected" if chosen else "") +
+        sections.append(f'<article id="{anchor}"><p class="eyebrow">Approach {index:02d}' + (" / Declared selection" if chosen else "") +
                         f'</p><h2>{escape(move["title"])}</h2><p class="identity">{escape(move["id"])}</p><dl>{fields}</dl>{experiment}<a class="back" href="#top">Back to overview</a></article>')
     sources = "".join('<li>' + escape(" | ".join(str(source[key]) for key in ("title", "publisher", "date", "url", "supports") if key in source)) + '</li>' for source in plan["sources"])
+    priority = '<section aria-label="Recorded priority"><h2>Recorded priority</h2>'
+    if selected is not None:
+        priority += '<p>Declared selected move: ' + escape(selected) + '</p><p>Selection records no verified chooser or approval. Check that the free-text priority describes this move; semantic alignment is not validated.</p>'
+    priority += '<p>' + escape(plan["prioritized_action"]) + '</p></section>'
     css = '''body{margin:0;background:#f3f5f8;color:#172337;font:17px/1.6 system-ui,sans-serif}main{max-width:1060px;margin:auto;padding:40px 24px}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.15;margin:12px 0}h2{font-size:1.6rem;line-height:1.25}h3{font-size:1.1rem}.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700;color:#35567b}.notice{border-left:4px solid #bd7c22;background:#fff5e1;padding:16px 20px}.identity{font:13px/1.6 ui-monospace,monospace;color:#526073;overflow-wrap:anywhere}nav{display:grid;gap:8px;margin:24px 0}a{color:#174d85;text-underline-offset:4px}nav a{padding:10px 14px;border:1px solid #cbd3df;background:white;border-radius:5px}a:focus-visible,summary:focus-visible{outline:3px solid #9b4e05;outline-offset:4px}article{background:white;border:1px solid #dce2ea;border-radius:10px;padding:28px;margin:24px 0;scroll-margin-top:16px}dl{display:grid;grid-template-columns:180px 1fr;gap:12px 20px}dt{font-weight:650}dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}summary{cursor:pointer;font-weight:700;padding:10px 0}details{border-top:1px solid #dce2ea;margin-top:22px}.back{display:inline-block;margin-top:18px}li{overflow-wrap:anywhere}footer{padding-top:20px;border-top:1px solid #cbd3df}section p{overflow-wrap:anywhere}@media(max-width:600px){main{padding:24px 16px}article{padding:20px}dl{grid-template-columns:1fr;gap:4px}dd{margin-bottom:14px}}@media print{body{background:white;font-size:11pt}main{max-width:none;padding:0}nav,.back{display:none}article{break-inside:avoid;border-radius:0}details{display:block}a{color:inherit}}'''
-    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>Unconventional Moves / Review</title><style>' + css + '</style></head><body><main id="top"><header><p class="eyebrow">Unconventional Moves / Offline review</p><h1>A considered next move.</h1><p>' + escape(plan["goal"]) + '</p><p class="identity">Plan SHA-256: ' + plan_digest(plan) + '</p><p class="notice"><strong>Human review required.</strong> No action is started or approved. Claims, consent, measurement, and rollback still need review.' + (' High-stakes plan: current reliable sources require human verification.' if plan["high_stakes"] else '') + '</p></header><nav aria-label="Approaches">' + ''.join(navigation) + '</nav><section aria-label="Recorded priority"><h2>Recorded priority</h2><p>' + escape(plan["prioritized_action"]) + '</p></section>' + ''.join(sections) + '<footer><h2>Declared sources</h2><p>No source was opened or verified by this report.</p><ul>' + (sources or '<li>None supplied.</li>') + '</ul><p>Comparison, novelty, safety, and effectiveness remain matters for human review. This offline report contains no execution or account controls.</p></footer></main></body></html>\n'
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>Unconventional Moves / Review</title><style>' + css + '</style></head><body><main id="top"><header><p class="eyebrow">Unconventional Moves / Offline review</p><h1>A considered next move.</h1><p>' + escape(plan["goal"]) + '</p><p class="identity">Plan SHA-256: ' + plan_digest(plan) + '</p><p class="notice"><strong>Human review required.</strong> No action is started or approved. Claims, consent, measurement, and rollback still need review.' + (' High-stakes plan: current reliable sources require human verification.' if plan["high_stakes"] else '') + '</p></header><nav aria-label="Approaches">' + ''.join(navigation) + '</nav>' + ''.join(sections) + '<footer><h2>Declared sources</h2><p>No source was opened or verified by this report.</p><ul>' + (sources or '<li>None supplied.</li>') + '</ul><p>Comparison, novelty, safety, and effectiveness remain matters for human review. This offline report contains no execution or account controls.</p></footer>' + priority + '</main></body></html>\n'
 
 
 def plan_digest(plan: dict) -> str:
@@ -151,8 +160,9 @@ def render_card(plan: dict) -> str:
         lines.append("- **" + field.replace("_", " ").title() + ":** " + markdown_text(str(value)))
     lines.extend(["", "## Review before starting", ""])
     lines.extend("- [ ] " + markdown_text(item) for item in card["review_before_start"])
-    lines.extend(["", "**Recorded first step and reason:** " + markdown_text(plan["prioritized_action"]), "",
-                  "Source claims: " + str(len(plan["sources"])) + " supplied; none verified by this card.", "", card["limitation"], ""])
+    lines.extend(["", "Source claims: " + str(len(plan["sources"])) + " supplied; none verified by this card.", "", card["limitation"], "",
+                  "The move ID is the declared selection, not verified human approval. Check that the free-text priority describes this move; semantic alignment is not validated.", "",
+                  "**Recorded first step and reason:** " + markdown_text(plan["prioritized_action"]), ""])
     return "\n".join(lines)
 
 
@@ -163,7 +173,7 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
     if outcome["contract_version"] != "unconventional-moves/outcome-v0.1":
         raise ValueError("unsupported outcome contract")
     if outcome["plan_sha256"] != plan_digest(plan) or outcome["move_id"] != move["id"]:
-        raise ValueError("outcome does not match the current plan revision and selected move")
+        raise ValueError("outcome does not match the current plan revision and selected move; retain old records with their original plan and use observation-draft for this revision")
     for field in ("observed_value", "elapsed_hours", "active_minutes"):
         value = outcome[field]
         if value is None and field == "observed_value":
@@ -190,7 +200,10 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
     if experiment["exposure"] == "consenting_participants" and not outcome["consent_confirmed"]:
         reasons.append("consent_not_confirmed")
     observed = outcome["observed_value"]
-    target_met = None if observed is None else (observed >= experiment["target"] if experiment["direction"] == "increase" else observed <= experiment["target"])
+    target_met = None
+    if observed is not None:
+        value, target = Decimal(str(observed)), Decimal(str(experiment["target"]))
+        target_met = value >= target if experiment["direction"] == "increase" else value <= target
     return {"plan_sha256": plan_digest(plan), "move_id": move["id"], "target_met": target_met,
             "measurement": measurement_context(experiment, observed),
             "decision": "stop_and_review" if reasons else "review_observation", "reasons": reasons,
@@ -528,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
-    select = commands.add_parser("select", help="Record a human choice and first step in a new revision")
+    select = commands.add_parser("select", help="Record a declared selection and first step in a new revision; no approval is established")
     select.add_argument("plan", type=Path)
     select.add_argument("--move-id", required=True)
     select.add_argument("--reason", required=True)
@@ -566,10 +579,10 @@ def main(argv: list[str] | None = None) -> int:
     verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
     verify.add_argument("bundle", type=Path)
     verify.add_argument("--output", type=Path)
-    review = commands.add_parser("review", help="Inspect mechanism diversity and evidence labels")
+    review = commands.add_parser("review", help="Flag repeated text and unclear evidence labels for human review")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
-    render = commands.add_parser("render", help="Render a validated plan as inert Markdown")
+    render = commands.add_parser("render", help="Render a validated plan as inert Markdown or HTML")
     render.add_argument("plan", type=Path)
     render.add_argument("--format", choices=["markdown", "html"], default="markdown")
     render.add_argument("--output", type=Path)

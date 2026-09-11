@@ -11,6 +11,11 @@
   "docs/local-workflow.md",
   "docs/release-notes-v0.1.0.md",
   "docs/release-notes-v0.2.0.md",
+  "evals/README.md",
+  "evals/cases.json",
+  "evals/results.json",
+  "evals/rubric.md",
+  "evals/session-probe.jsonl",
   "examples/adversarial-fixtures.json",
   "examples/bounded-outcome.json",
   "examples/bounded-plan.json",
@@ -28,5 +33,11 @@
   "skill/unconventional-moves/agents/openai.yaml",
   "skill/unconventional-moves/references/moves-v0.2.schema.json",
   "skill/unconventional-moves/references/moves.schema.json",
-  "templates/worksheet.md"
+  "skill/unconventional-moves/references/strategy-review.md",
+  "templates/worksheet.md",
+  "tests/test_cycle.py",
+  "tests/test_evals.py",
+  "tests/test_package.py",
+  "tests/test_validate.py",
+  "tests/test_workflow.py"
 ]

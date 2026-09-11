@@ -11,7 +11,7 @@ from itertools import chain
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from validate_plan import load_plan_json, validate_plan_data
+from validate_plan import contains_unsafe_action, load_plan_json, validate_plan_data
 
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
@@ -357,7 +357,8 @@ class Checker:
                 continue
             self.ok(_DASH_CHARS.isdisjoint(content) and not any(entity in content for entity in _DASH_ENTITIES), f"no em or en dash: {path.relative_to(self.root)}")
             if path.suffix in {".md", ".yaml", ".yml", ".json"}:
-                self.ok(UNSAFE_STRUCTURE.search(content) is None, f"no prohibited unsafe structure: {path.relative_to(self.root)}")
+                self.ok(not contains_unsafe_action(content, UNSAFE_STRUCTURE),
+                        f"no unqualified lexical safety-pattern match: {path.relative_to(self.root)}")
         self.check_links()
 
 

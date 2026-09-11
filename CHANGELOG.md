@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Strengthen causal diversity, contextual framing, experiment measurement, and one defensible first action without expanding the plan contracts.
+- Resolve Sources ordering and distinguish declared selection from human approval.
+- Add a frozen behavioral rubric and 20 synthetic cases, separating offline fixture checks from optional model review.
+- Recognize narrow prevention language without globally exempting negated text; reject malformed Unicode, nesting, and numeric overflow.
+- Align decimal target validation and outcome comparison; avoid empty reports on encoding failure.
+- Reject ambiguous package paths and symlink ancestors; include rerunnable tests and verify deterministic same-environment builds.
+- Configure CI for Python 3.11 and 3.12 on Windows and Ubuntu.
+
 - Record validated cumulative histories without replacing earlier files.
 - Review exact checkpoint intervals, effort, missing measurements, target regressions, and remaining bounds.
 - Filter declared start and duration windows and identify repeated source support.

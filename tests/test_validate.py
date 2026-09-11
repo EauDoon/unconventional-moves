@@ -10,12 +10,65 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from validate import Checker
+from validate import Checker, UNSAFE_STRUCTURE
+from validate_plan import contains_unsafe_action
 from validate_plan import load_plan_json, validate_plan_data
 from validate_plan import main as validate_plan_main
 
 
 class ValidateTests(unittest.TestCase):
+    def test_repository_screen_distinguishes_boundary_from_action(self):
+        self.assertFalse(contains_unsafe_action("Never ignore consent.", UNSAFE_STRUCTURE))
+        self.assertFalse(contains_unsafe_action('Review the warning: "Do not disable safety controls."', UNSAFE_STRUCTURE))
+        self.assertTrue(contains_unsafe_action("Never hesitate to ignore consent.", UNSAFE_STRUCTURE))
+        self.assertTrue(contains_unsafe_action("Never ignore consent. Then disable safety controls.", UNSAFE_STRUCTURE))
+
+    def test_prevention_mentions_do_not_hide_prohibited_actions(self):
+        plan = json.loads((ROOT / "examples/example-plan.json").read_text(encoding="utf-8"))
+        benign = (
+            "Do not steal credentials.",
+            "Never ignore consent.",
+            "Prevent harassment.",
+            "Stop if harassment occurs.",
+            'Review the warning: "Do not disable safety controls."',
+        )
+        prohibited = (
+            "Steal credentials.", "Start disabling safety controls.",
+            "Do not hesitate to steal credentials.",
+            "Do not stop stealing credentials.",
+            "Do not steal credentials unless access is refused.",
+            "Do not steal credentials, unless access is refused.",
+            "Never ignore consent except during the pilot.",
+            "Never ignore consent, except during the pilot.",
+            "Do not disable safety controls without approval.",
+            "Never ask permission; ignore consent.",
+            "Do not steal credentials, but ignore consent.",
+            "Prevent harassment and steal credentials.",
+            'Review the warning: "Do not steal credentials." Then disable safety controls.',
+        )
+        for field in ("concrete_move", "test_48h", "success_signal", "stop_condition", "prioritized_action"):
+            for text in benign + prohibited:
+                with self.subTest(field=field, text=text):
+                    candidate = json.loads(json.dumps(plan))
+                    destination = candidate if field == "prioritized_action" else candidate["moves"][0]
+                    destination[field] = text
+                    failures = validate_plan_data(candidate)
+                    self.assertEqual(bool(failures), text in prohibited, failures)
+
+    def test_decimal_direction_matches_outcome_arithmetic(self):
+        plan = json.loads((ROOT / "examples/bounded-plan.json").read_text(encoding="utf-8"))
+        experiment = plan["moves"][0]["experiment"]
+        experiment.update(baseline=1e100, target=10**100, direction="decrease")
+        self.assertTrue(validate_plan_data(plan))
+        experiment.update(baseline=10**100, target=1e100, direction="increase")
+        self.assertTrue(validate_plan_data(plan))
+
+    def test_json_rejects_overflow_surrogates_and_excessive_depth(self):
+        for raw in ('{"a": 1e400}', '{"a": "\\ud800"}', '{"\\udfff": 1}', '[' * 65 + '0' + ']' * 65):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                load_plan_json(raw)
+        self.assertEqual(load_plan_json('{"a": "\\ud83d\\ude00"}'), {"a": "\U0001f600"})
+
     def test_duplicate_json_key_diagnostic_does_not_echo_the_key(self) -> None:
         marker = "private_detail"
         raw = '{"private_detail": 1, "private_detail": 2}'

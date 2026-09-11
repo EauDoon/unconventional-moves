@@ -1,6 +1,6 @@
 # Local plan workflow
 
-Use Python 3.11 or later. All commands use the standard library and make no network requests. From the repository or extracted package root:
+Use Python 3.11 or 3.12. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
 
 ```sh
 python scripts/moves.py init --output draft.json
@@ -25,7 +25,7 @@ Review reports flag exact repeated mechanisms, actions, and tests after case and
 python scripts/moves.py render draft.json --output draft.md
 ```
 
-The renderer includes all moves, bounds, evidence, sources, and exactly one prioritized action. User-supplied Markdown and HTML are escaped and line breaks inside values become spaces. It does not follow source URLs, embed remote content, or publish the report. Keep the JSON as the editable source.
+The renderer includes all moves, bounds, evidence, sources, and exactly one prioritized action at the end. Sources precede that final recommendation. Version 0.2 reports show the declared selected ID alongside the free-text recommendation; reconciling their meaning remains a human check. Existing free-text plans are not invalidated by an unreliable string-matching heuristic. User-supplied Markdown and HTML are escaped and line breaks inside values become spaces. It does not follow source URLs, embed remote content, or publish the report. Keep the JSON as the editable source.
 
 ## Prepare the selected experiment
 
@@ -90,7 +90,7 @@ Find moves whose declared active-time budget and participant exposure fit your a
 python scripts/moves.py screen draft.json --max-minutes 20 --exposure self_only
 ```
 
-The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to explicitly record a human choice after review.
+The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to record a choice after review; the command cannot authenticate who supplied it.
 
 Add `--max-start-hours 12 --max-duration-hours 24` to exclude declared start windows or experiment durations beyond your available window. A start ceiling of zero accepts only immediate-start declarations. These optional filters leave older command behavior intact and do not reschedule a move or prove that its latest start is feasible.
 
@@ -156,11 +156,11 @@ Record your choice in a separate validated revision instead of manually synchron
 python scripts/moves.py select draft.json --move-id move-02 --reason "Fits available practice time" --first-step "Review the private practice setup" --output revised.json
 ```
 
-Selection never ranks or starts a move. It requires a human reason and first step, preserves the input, and changes the plan digest. Create a fresh card and observations for that revision.
+Selection never ranks or starts a move. It requires a supplied reason and first step, preserves the input, and changes the plan digest. These declarations do not authenticate a human chooser or approval. Create a fresh card and observations for that revision.
 
 ## Portfolio table
 
-Use `python scripts/moves.py table draft.json --format csv --output portfolio.csv` to compare declared metrics, baselines, targets, start windows, durations, active-time budgets, exposure, and rollback in a spreadsheet. JSON is the default and preserves exact authored strings. CSV uses standard quoting and prefixes all text cells with an apostrophe to prevent spreadsheet formulas; numeric cells remain numeric. Each row retains its plan digest, human-selected flag, and pending human-review state. Original move order is preserved; different metrics cannot be ranked as if their numbers were comparable.
+Use `python scripts/moves.py table draft.json --format csv --output portfolio.csv` to compare declared metrics, baselines, targets, start windows, durations, active-time budgets, exposure, and rollback in a spreadsheet. JSON is the default and preserves exact authored strings. CSV uses standard quoting and prefixes all text cells with an apostrophe to prevent spreadsheet formulas; numeric cells remain numeric. Each row retains its plan digest, declared-selection flag, and pending human-review state. Original move order is preserved; different metrics cannot be ranked as if their numbers were comparable.
 
 ## Experiment debrief
 
@@ -173,3 +173,37 @@ python scripts/moves.py compare draft.json revised.json --output changes.json
 ```
 
 The report matches moves by ID, distinguishes reordering from content changes, and shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.
+
+## Replay a complete synthetic history
+
+From a fresh extracted package root, run these commands with unused output names:
+
+```sh
+python scripts/moves.py init --output draft.json
+python scripts/moves.py review draft.json
+python scripts/moves.py select draft.json --move-id move-01 --reason "Synthetic replay: test cue timing first" --first-step "Privately review the next existing cue" --output selected.json
+python scripts/moves.py card selected.json --output card.json
+python scripts/moves.py observation-draft selected.json --output observation.json
+```
+
+For this fictional replay only, edit `observation.json`: set `elapsed_hours` to
+`24`, `active_minutes` to `10`, `observed_value` to `1`, and `notes` to
+`Synthetic replay only, no experiment occurred.` Keep the generated revision
+hash, move ID, and other fields unchanged. For real work, enter actual observations
+and actual consent/stop declarations instead; leave an unavailable value `null`.
+
+```sh
+python scripts/moves.py outcome selected.json observation.json
+python scripts/moves.py record selected.json observation.json --output checkpoints.json
+python scripts/moves.py timeline selected.json checkpoints.json
+python scripts/moves.py debrief selected.json checkpoints.json --output debrief.md
+python scripts/moves.py handoff selected.json --timeline checkpoints.json --output handoff.json
+python scripts/moves.py verify-handoff handoff.json
+```
+
+The synthetic target is not met, and the result requires review. A zero exit
+status means report creation succeeded, never experiment success or approval.
+To add another observation, create a new draft, enter cumulative times and honest
+notes, then use `record` with `--history checkpoints.json` and a fresh output
+name. A revision mismatch requires a new card/draft for the current plan;
+retain earlier observations with their original plan rather than rebinding them.
