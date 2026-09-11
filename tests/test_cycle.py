@@ -17,7 +17,7 @@ class CheckpointReviewTests(unittest.TestCase):
         observation = {**self.first, "elapsed_hours": 0.03, "active_minutes": 1.8}
         self.assertEqual(moves.evaluate_outcome(self.plan, observation)["decision"], "review_observation")
         self.assertTrue(moves.verify_handoff(moves.handoff_bundle(self.plan, observation))["consistent"])
-        self.assertEqual(len(moves.append_checkpoint(self.plan, observation)), 1)
+        self.assertEqual(len(moves.append_checkpoint(self.plan, observation, [])), 1)
         with self.assertRaises(ValueError):
             moves.evaluate_outcome(self.plan, {**observation, "active_minutes": 1.800001})
 
@@ -162,6 +162,12 @@ class CheckpointReviewTests(unittest.TestCase):
             before = output.read_bytes()
             self.assertEqual(moves.main(command), 1)
             self.assertEqual(output.read_bytes(), before)
+            null_history = directory / "null.json"
+            null_history.write_text("null", encoding="utf-8")
+            rejected_output = directory / "rejected.json"
+            self.assertEqual(moves.main(["record", str(plan), str(observation), "--history", str(null_history),
+                                         "--output", str(rejected_output)]), 1)
+            self.assertFalse(rejected_output.exists())
 
     def setUp(self):
         self.plan = fixtures.bounded_example()

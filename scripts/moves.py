@@ -475,10 +475,10 @@ def review_limits(plan: dict, observations: object) -> dict:
             "limitation": "Unused declared bounds are not permission to continue. Earlier stops, actual consent, and human authority still control."}
 
 
-def append_checkpoint(plan: dict, observation: object, history: object = None) -> list:
-    if history is not None and not isinstance(history, list):
+def append_checkpoint(plan: dict, observation: object, history: object) -> list:
+    if not isinstance(history, list):
         raise ValueError("checkpoint history must be an array")
-    observations = [*(history or []), observation]
+    observations = [*history, observation]
     review_timeline(plan, observations)
     if len((json.dumps(observations, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
         raise ValueError("checkpoint history exceeds the supported JSON byte limit")
@@ -594,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
             emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
         elif args.command == "record":
             result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
-                                       read_json_file(args.history) if args.history else None)
+                                       read_json_file(args.history) if args.history else [])
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "init":
             plan = read_plan(ROOT / "examples/bounded-plan.json")
