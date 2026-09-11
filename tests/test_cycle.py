@@ -13,6 +13,17 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_screen_respects_start_and_duration_without_reselection(self):
+        self.plan["moves"][1]["experiment"].update(start_within_hours=0, duration_hours=1)
+        result = moves.screen_moves(self.plan, 20, "self_only", 0, 1)
+        self.assertEqual(result["matching_move_ids"], ["move-02"])
+        self.assertEqual(result["excluded"][0]["reasons"], ["start_window_exceeds_ceiling", "duration_exceeds_ceiling"])
+        self.assertEqual(self.plan["selected_move_id"], "move-01")
+        self.assertEqual(len(moves.screen_moves(self.plan, 20, "self_only")["matching_move_ids"]), 5)
+        for start, duration in ((-1, 1), (0, 0), (49, 1), (0, True)):
+            with self.assertRaises(ValueError):
+                moves.screen_moves(self.plan, 20, "self_only", start, duration)
+
     def test_remaining_bounds_preserve_stops_and_measure_overruns(self):
         first = {**self.first, "stop_triggered": True}
         result = moves.review_limits(self.plan, [first, self.second])

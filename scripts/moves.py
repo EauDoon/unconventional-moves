@@ -270,12 +270,16 @@ def verify_handoff(bundle: object) -> dict:
             "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
 
 
-def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
+def screen_moves(plan: dict, max_minutes: int, exposure: str,
+                 max_start_hours: int | None = None, max_duration_hours: int | None = None) -> dict:
     selected_move(plan)
     if type(max_minutes) is not int or not 1 <= max_minutes <= 2880:
         raise ValueError("maximum active minutes must be an integer from 1 to 2880")
     if exposure not in {"self_only", "consenting_participants"}:
         raise ValueError("unsupported exposure ceiling")
+    for value, minimum in ((max_start_hours, 0), (max_duration_hours, 1)):
+        if value is not None and (type(value) is not int or not minimum <= value <= 48):
+            raise ValueError("start and duration ceilings must be integer hours within the supported 48-hour bounds")
     fits, excluded = [], []
     for move in plan["moves"]:
         experiment, reasons = move["experiment"], []
@@ -283,11 +287,16 @@ def screen_moves(plan: dict, max_minutes: int, exposure: str) -> dict:
             reasons.append("active_time_exceeds_ceiling")
         if exposure == "self_only" and experiment["exposure"] != "self_only":
             reasons.append("participants_outside_ceiling")
+        if max_start_hours is not None and experiment["start_within_hours"] > max_start_hours:
+            reasons.append("start_window_exceeds_ceiling")
+        if max_duration_hours is not None and experiment["duration_hours"] > max_duration_hours:
+            reasons.append("duration_exceeds_ceiling")
         if reasons:
             excluded.append({"move_id": move["id"], "reasons": reasons})
         else:
             fits.append(move["id"])
     return {"plan_sha256": plan_digest(plan), "max_minutes": max_minutes, "exposure_ceiling": exposure,
+            "max_start_hours": max_start_hours, "max_duration_hours": max_duration_hours,
             "matching_move_ids": fits, "excluded": excluded, "selected_move_id": plan["selected_move_id"],
             "selected_within_constraints": plan["selected_move_id"] in fits,
             "limitation": "Original order retained. Declared constraints only; no ranking, consent verification, safety certification, or automatic selection."}
@@ -447,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
     screen.add_argument("plan", type=Path)
     screen.add_argument("--max-minutes", type=int, required=True)
     screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
+    screen.add_argument("--max-start-hours", type=int)
+    screen.add_argument("--max-duration-hours", type=int)
     screen.add_argument("--output", type=Path)
     handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
     handoff.add_argument("plan", type=Path)
@@ -489,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "verify-handoff":
             emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
         elif args.command == "screen":
-            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure)
+            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure,
+                                  args.max_start_hours, args.max_duration_hours)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
             result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)

@@ -90,6 +90,8 @@ python scripts/moves.py screen draft.json --max-minutes 20 --exposure self_only
 
 The report preserves original order, explains every exclusion, and flags an out-of-scope selected move without replacing it. The `consenting_participants` ceiling includes self-only moves too; it does not establish that anyone consented. Use `select` to explicitly record a human choice after review.
 
+Add `--max-start-hours 12 --max-duration-hours 24` to exclude declared start windows or experiment durations beyond your available window. A start ceiling of zero accepts only immediate-start declarations. These optional filters leave older command behavior intact and do not reschedule a move or prove that its latest start is feasible.
+
 ## Declared source dates
 
 Audit declared source dates against a reference date and age threshold you choose:
