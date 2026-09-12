@@ -13,6 +13,78 @@ import moves
 
 
 class CheckpointReviewTests(unittest.TestCase):
+    def test_timeline_csv_preserves_missing_measurements_and_earlier_stops(self):
+        observations = [{**self.first, "observed_value": None, "stop_triggered": True}, self.second]
+        original = copy.deepcopy(observations)
+        rows = list(csv.DictReader(io.StringIO(moves.timeline_csv(self.plan, observations))))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([row["checkpoint"] for row in rows], ["1", "2"])
+        self.assertEqual(rows[0]["observed_value"], "")
+        self.assertEqual(rows[0]["target_met"], "")
+        self.assertEqual(rows[0]["measurement_available"], "False")
+        self.assertEqual(rows[1]["observed_value"], str(self.second["observed_value"]))
+        self.assertEqual(rows[1]["target_met"], "True")
+        self.assertEqual(rows[1]["decision"], "'stop_and_review")
+        self.assertEqual(rows[1]["stop_reasons"], "'declared_stop_condition_triggered")
+        self.assertEqual(rows[1]["after_stop"], "True")
+        self.assertEqual(rows[1]["plan_sha256"], "'" + moves.plan_digest(self.plan))
+        self.assertEqual(rows[1]["review_state"], "'human_review_required")
+        self.assertEqual(observations, original)
+
+    def test_timeline_csv_quotes_authored_cells_and_preserves_decimal_progress(self):
+        first = {**self.first, "elapsed_hours": 0.03, "active_minutes": 1.8,
+                 "notes": '\n=HYPERLINK("https://example.org")\nSynthetic, "only"', "observed_value": 0}
+        rows = list(csv.DictReader(io.StringIO(moves.timeline_csv(self.plan, [first]))))
+        self.assertEqual(rows[0]["notes"], "'" + first["notes"])
+        self.assertEqual(rows[0]["interval_hours"], "'0.03")
+        self.assertEqual(rows[0]["interval_active_minutes"], "'1.8")
+        self.assertEqual(rows[0]["interval_activity_fraction"], "'1")
+        self.assertEqual(rows[0]["progress_fraction"], "'0")
+        self.assertEqual(rows[0]["observed_value"], "0")
+        self.assertEqual(rows[0]["measurement_available"], "True")
+        self.assertEqual(rows[0]["target_met"], "False")
+
+    def test_timeline_csv_stop_history_is_cumulative_not_retroactive(self):
+        self.plan["moves"][0]["experiment"].update(exposure="consenting_participants", baseline=10,
+                                                    target=2, direction="decrease")
+        first = {**self.first, "plan_sha256": moves.plan_digest(self.plan), "consent_confirmed": True,
+                 "observed_value": 6, "elapsed_hours": 0, "active_minutes": 0}
+        second = {**first, "elapsed_hours": 1, "consent_confirmed": False, "observed_value": 2}
+        third = {**second, "elapsed_hours": 2, "consent_confirmed": True, "observed_value": 1}
+        rows = list(csv.DictReader(io.StringIO(moves.timeline_csv(self.plan, [first, second, third]))))
+        self.assertEqual([row["decision"] for row in rows],
+                         ["'review_observation", "'stop_and_review", "'stop_and_review"])
+        self.assertEqual([row["after_stop"] for row in rows], ["False", "False", "True"])
+        self.assertEqual(rows[0]["interval_activity_fraction"], "")
+        self.assertEqual(rows[0]["progress_fraction"], "'0.5")
+        self.assertEqual(rows[1]["target_met"], "True")
+        self.assertEqual(rows[2]["stop_reasons"], "'consent_not_confirmed")
+        self.assertEqual(rows[2]["consent_confirmed"], "True")
+
+    def test_timeline_csv_cli_defaults_to_json_and_rejects_invalid_history(self):
+        runner = fixtures.FullWorkflowTests()
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            plan, history, output = [directory / name for name in ("plan.json", "history.json", "history.csv")]
+            plan.write_text(json.dumps(self.plan), encoding="utf-8")
+            history.write_text(json.dumps([self.first, self.second]), encoding="utf-8")
+            result = runner.run_cli("timeline", plan, history)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(json.loads(result.stdout)["checkpoints"]), 2)
+            result = runner.run_cli("timeline", plan, history, "--format", "csv", "--output", output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            original = output.read_bytes()
+            self.assertEqual(len(list(csv.DictReader(io.StringIO(original.decode("utf-8"))))), 2)
+            result = runner.run_cli("timeline", plan, history, "--format", "csv", "--output", output)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(output.read_bytes(), original)
+            for invalid in ([], [self.second, self.first], [{**self.first, "plan_sha256": "wrong"}]):
+                history.write_text(json.dumps(invalid), encoding="utf-8")
+                result = runner.run_cli("timeline", plan, history, "--format", "csv", "--output", directory / "invalid.csv")
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertFalse((directory / "invalid.csv").exists())
+
     def test_mixed_numeric_types_use_declared_decimal_target_comparisons(self):
         experiment = self.plan["moves"][0]["experiment"]
         for baseline, direction, observed, attained in (

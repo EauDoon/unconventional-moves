@@ -469,14 +469,38 @@ def portfolio_rows(plan: dict) -> list[dict]:
              "review_state": "human_review_required"} for move in plan["moves"]]
 
 
-def portfolio_csv(plan: dict) -> str:
-    rows = portfolio_rows(plan)
+def spreadsheet_csv(rows: list[dict]) -> str:
+    """Export validated rows with inert text cells and explicit empty nulls."""
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=list(rows[0]), lineterminator="\n")
     writer.writeheader()
     # Spreadsheet text markers keep authored cells inert, including multiline formulas.
     writer.writerows({key: "'" + value if isinstance(value, str) else value for key, value in row.items()} for row in rows)
     return output.getvalue()
+
+
+def portfolio_csv(plan: dict) -> str:
+    return spreadsheet_csv(portfolio_rows(plan))
+
+
+def timeline_csv(plan: dict, observations: object) -> str:
+    """Export the complete validated history, retaining each cumulative stop."""
+    timeline = review_timeline(plan, observations)
+    rows, stop_reasons = [], set()
+    for checkpoint, observation in zip(timeline["checkpoints"], observations):
+        review = checkpoint["review"]
+        stop_reasons.update(review["reasons"])
+        rows.append({"plan_sha256": timeline["plan_sha256"], "move_id": timeline["move_id"],
+                     **{key: checkpoint[key] for key in ("checkpoint", "elapsed_hours", "active_minutes",
+                         "interval_hours", "interval_active_minutes", "interval_activity_fraction")},
+                     **review["measurement"], "measurement_available": observation["observed_value"] is not None,
+                     "target_met": review["target_met"], "stop_triggered": observation["stop_triggered"],
+                     "consent_confirmed": observation["consent_confirmed"], "after_stop": checkpoint["after_stop"],
+                     "decision": "stop_and_review" if stop_reasons else "review_observation",
+                     "stop_reasons": "; ".join(sorted(stop_reasons)),
+                     "source_verification_required": review["source_verification_required"],
+                     "notes": observation["notes"], "review_state": "human_review_required"})
+    return spreadsheet_csv(rows)
 
 
 def review_limits(plan: dict, observations: object) -> dict:
@@ -561,6 +585,7 @@ def main(argv: list[str] | None = None) -> int:
     timeline = commands.add_parser("timeline", help="Review cumulative checkpoints with persistent stop conditions")
     timeline.add_argument("plan", type=Path)
     timeline.add_argument("observations", type=Path)
+    timeline.add_argument("--format", choices=["json", "csv"], default="json")
     timeline.add_argument("--output", type=Path)
     limits = commands.add_parser("limits", help="Review remaining bounds and overruns across checkpoint history")
     limits.add_argument("plan", type=Path)
@@ -643,8 +668,10 @@ def main(argv: list[str] | None = None) -> int:
             result = review_limits(read_plan(args.plan), read_json_file(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
-            result = review_timeline(read_plan(args.plan), read_json_file(args.observations))
-            emit(json.dumps(result, indent=2) + "\n", args.output)
+            plan, observations = read_plan(args.plan), read_json_file(args.observations)
+            content = timeline_csv(plan, observations) if args.format == "csv" else json.dumps(
+                review_timeline(plan, observations), indent=2) + "\n"
+            emit(content, args.output)
         elif args.command == "observation-draft":
             emit(json.dumps(observation_draft(read_plan(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "select":
