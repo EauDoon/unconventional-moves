@@ -135,6 +135,29 @@ The shared outcome validator also compares cumulative elapsed time in decimal, a
 
 Each timeline row includes decimal-string interval hours, active minutes, and activity fraction. The first interval begins at zero; a zero-length initial interval has a `null` fraction. Later idle intervals report zero activity. These describe reported effort, not productivity or an instruction to use the remaining time.
 
+### Export checkpoint history to a spreadsheet
+
+```sh
+python scripts/moves.py timeline draft.json checkpoints.json --format csv --output checkpoints.csv
+```
+
+The CSV contains one row per checkpoint in chronological order, including the
+plan digest, selected move, cumulative and interval effort, metric, baseline,
+target, observed value, progress, consent/stop declarations, and original notes.
+Each row's decision and stop reasons retain every stop reached at or before that
+checkpoint. Later target attainment cannot clear an earlier stop; later stops
+are not applied retroactively to earlier rows.
+
+Missing measurements and unavailable fractions are empty cells. Use
+`measurement_available` to distinguish an unmeasured checkpoint from a measured
+zero; `target_met` is empty when unmeasured. Exact decimal strings and all other
+text cells have an apostrophe prefix to prevent spreadsheet formulas and preserve
+their representation. Numeric observation fields remain numeric, so spreadsheet
+software may round large values; keep the JSON history as the source record.
+Every row retains `human_review_required`. The entire history is validated before
+output is created, and existing files are never overwritten. JSON remains the
+default format and existing handoffs are unchanged.
+
 ## Measurement context
 
 Use `python scripts/moves.py record draft.json observation.json --output checkpoints.json` to begin a checkpoint history. Add `--history checkpoints.json --output next-checkpoints.json` for the next observation. The complete history is validated before a new file is created. Existing history is never rewritten. Reports may retain honest after-stop observations; recording one does not authorize activity after a stop.

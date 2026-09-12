@@ -110,6 +110,12 @@ new observation records bound to that plan revision. Follow the complete
 [local workflow](docs/local-workflow.md) and [experiment contract](docs/experiment-contract.md)
 for selection, checkpoints, history, handoffs, comparisons, and exports.
 
+Checkpoint histories can also be exported with
+`python scripts/moves.py timeline draft.json checkpoints.json --format csv --output checkpoints.csv`
+for spreadsheet review of measurements, progress, notes, and persistent stops.
+Missing measurements remain distinct from measured zero; JSON remains the source
+record.
+
 A successful command exit means a report was produced. Exit 0 does not mean an
 experiment succeeded or was approved; 1 means invalid input or a file error,
 and 2 means invalid command arguments. Read the outcome, warnings, and stop
