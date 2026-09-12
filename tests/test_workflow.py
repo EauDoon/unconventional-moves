@@ -195,6 +195,52 @@ class OutcomeTests(unittest.TestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_numeric_representation_changes_are_visible_when_binding_changes(self):
+        from moves import compare_plans, plan_digest
+        for field, old, new in (("baseline", 0, 0.0), ("baseline", 0.0, -0.0),
+                                ("target", 2, 2.0), ("target", 10**100, 1e100)):
+            with self.subTest(field=field, old=old, new=new):
+                before = bounded_example()
+                before["moves"][0]["experiment"][field] = old
+                after = copy.deepcopy(before)
+                after["moves"][0]["experiment"][field] = new
+                self.assertEqual(validate_plan_data(before), [])
+                self.assertEqual(validate_plan_data(after), [])
+                result = compare_plans(before, after)
+                self.assertNotEqual(plan_digest(before), plan_digest(after))
+                self.assertTrue(result["observation_binding_changed"])
+                self.assertEqual(len(result["changed_moves"]), 1)
+                changes = result["changed_moves"][0]["changes"]
+                self.assertEqual(len(changes), 1)
+                self.assertEqual(changes[0]["field"], "experiment." + field)
+                self.assertEqual(json.dumps(changes[0]["before"]), json.dumps(old))
+                self.assertEqual(json.dumps(changes[0]["after"]), json.dumps(new))
+                self.assertIn("experiment." + field, [item["field"] for item in result["review_triggers"]])
+
+    def test_object_key_order_does_not_create_revision_changes(self):
+        from moves import compare_plans
+        before = bounded_example()
+        after = copy.deepcopy(before)
+        after["moves"][0]["experiment"] = dict(reversed(list(after["moves"][0]["experiment"].items())))
+        after = dict(reversed(list(after.items())))
+        result = compare_plans(before, after)
+        self.assertFalse(result["observation_binding_changed"])
+        self.assertEqual(result["changed_moves"], [])
+        self.assertEqual(result["metadata_changes"], [])
+        self.assertEqual(result["review_triggers"], [])
+
+    def test_strategy_and_test_revisions_require_review_in_both_contracts(self):
+        from moves import compare_plans
+        for make_plan in (example, bounded_example):
+            for field in ("mechanism", "test_48h", "why_overlooked"):
+                with self.subTest(contract=make_plan.__name__, field=field):
+                    before = make_plan()
+                    after = copy.deepcopy(before)
+                    after["moves"][0][field] = "Revised synthetic private practice approach."
+                    result = compare_plans(before, after)
+                    self.assertEqual([item["field"] for item in result["review_triggers"]], [field])
+                    self.assertEqual(result["review_triggers"][0]["move_id"], "move-01")
+
     def test_reordering_and_bound_changes_have_distinct_diagnostics(self):
         from moves import compare_plans
         before = bounded_example()
@@ -383,6 +429,26 @@ class FullWorkflowTests(unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run([sys.executable, str(ROOT / "scripts/moves.py"), *map(str, args)],
                               cwd=ROOT, capture_output=True, text=True)
+
+    def test_handoff_rejects_supplied_null_observation_without_creating_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            observation, bundle = temp / "observation.json", temp / "handoff.json"
+            observation.write_text("null\n", encoding="utf-8")
+            result = self.run_cli("handoff", ROOT / "examples/bounded-plan.json",
+                                  "--observation", observation, "--output", bundle)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("observation must be an object", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse(bundle.exists())
+            self.assertEqual(observation.read_text(encoding="utf-8"), "null\n")
+            # Omitting the argument still creates a compatible plan-only handoff.
+            result = self.run_cli("handoff", ROOT / "examples/bounded-plan.json", "--output", bundle)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIsNone(read_json_file(bundle)["observation"])
+            result = self.run_cli("verify-handoff", bundle)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(json.loads(result.stdout)["observation_present"])
 
     def test_actual_cli_roundtrip(self):
         with tempfile.TemporaryDirectory() as td:

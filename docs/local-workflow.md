@@ -66,6 +66,11 @@ python scripts/moves.py verify-handoff handoff.json
 
 Omit `--observation` for a plan-only handoff. The bundle contains the full plan, its digest, review/card, and optional raw observation plus recomputed outcome review. Verification validates the plan and observation and recomputes every derived field. It detects accidental or partial tampering, not authorship or an attacker who rewrites a consistent unsigned bundle. All human checks remain pending. The actual formatted bundle must fit the same 1 MB JSON input bound, allowing a write/read roundtrip. Output files are never overwritten.
 
+An explicitly supplied observation must be a completed outcome object. A file
+containing `null` is rejected before creating output; it cannot silently turn a
+requested observation handoff into a plan-only handoff. Existing plan-only bundles
+retain their `null` observation and remain supported by `verify-handoff`.
+
 Use `handoff draft.json --timeline checkpoints.json --output history-handoff.json` to include the entire supplied cumulative history in a version 0.2 handoff. `--timeline` and `--observation` are mutually exclusive. `verify-handoff` accepts both versions and recomputes the timeline review plus an observation digest that covers notes as well as numbers. Earlier stops cannot be hidden by only exporting the latest derived review. The tool cannot detect omitted historical records or a fully rewritten consistent unsigned bundle, so reviewers must still establish completeness themselves.
 
 ## Printable card
@@ -81,6 +86,14 @@ JSON remains the default for existing callers. Markdown escapes authored content
 ## Revision review triggers
 
 Revision comparisons now include `review_triggers` for changed scope, selected action, evidence, measurements, stop/success conditions, and added or removed moves. Expanded declared time bounds are called out separately. `observation_binding_changed` identifies when old observations no longer match the revision, including reorder-only changes. An empty trigger list does not certify that the change is safe; every changed plan still needs review.
+
+Changes to a mechanism, its causal explanation, or the 48-hour test also trigger
+review in both plan versions. Field comparisons use the same canonical parsed
+JSON representation as the plan digest: changing `0` to `0.0` or `0.0` to `-0.0`
+is visible because it changes the observation binding, even when the numeric
+meaning is equivalent. JSON whitespace and object key order do not count as
+revisions. Original numeric spelling beyond what JSON parsing preserves is not
+compared.
 
 ## Constraint shortlist
 
