@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject explicitly supplied null observations instead of silently exporting plan-only handoffs.
+- Align revision diffs with digest representations and flag changed mechanisms, causal explanations, and tests for review.
 - Strengthen causal diversity, contextual framing, experiment measurement, and one defensible first action without expanding the plan contracts.
 - Resolve Sources ordering and distinguish declared selection from human approval.
 - Add a frozen behavioral rubric and 20 synthetic cases, separating offline fixture checks from optional model review.

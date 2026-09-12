@@ -125,8 +125,13 @@ def render_html(plan: dict) -> str:
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>Unconventional Moves / Review</title><style>' + css + '</style></head><body><main id="top"><header><p class="eyebrow">Unconventional Moves / Offline review</p><h1>A considered next move.</h1><p>' + escape(plan["goal"]) + '</p><p class="identity">Plan SHA-256: ' + plan_digest(plan) + '</p><p class="notice"><strong>Human review required.</strong> No action is started or approved. Claims, consent, measurement, and rollback still need review.' + (' High-stakes plan: current reliable sources require human verification.' if plan["high_stakes"] else '') + '</p></header><nav aria-label="Approaches">' + ''.join(navigation) + '</nav>' + ''.join(sections) + '<footer><h2>Declared sources</h2><p>No source was opened or verified by this report.</p><ul>' + (sources or '<li>None supplied.</li>') + '</ul><p>Comparison, novelty, safety, and effectiveness remain matters for human review. This offline report contains no execution or account controls.</p></footer>' + priority + '</main></body></html>\n'
 
 
+def canonical_json(value: object) -> str:
+    """Use the same parsed JSON representation for revision diffs and bindings."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+
+
 def plan_digest(plan: dict) -> str:
-    return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical_json(plan).encode("utf-8")).hexdigest()
 
 
 def selected_move(plan: dict) -> dict:
@@ -232,16 +237,18 @@ def compare_plans(before: dict, after: dict) -> dict:
         fields = []
         for field in sorted(old[move_id].keys() | new[move_id].keys()):
             left, right = old[move_id].get(field), new[move_id].get(field)
-            if left != right:
+            if canonical_json(left) != canonical_json(right):
                 if field == "experiment" and isinstance(left, dict) and isinstance(right, dict):
                     fields.extend({"field": "experiment." + key, "before": left.get(key), "after": right.get(key)}
-                                  for key in sorted(left.keys() | right.keys()) if left.get(key) != right.get(key))
+                                  for key in sorted(left.keys() | right.keys())
+                                  if canonical_json(left.get(key)) != canonical_json(right.get(key)))
                 else:
                     fields.append({"field": field, "before": left, "after": right})
         if fields:
             changed.append({"move_id": move_id, "changes": fields})
     metadata = [{"field": field, "before": before.get(field), "after": after.get(field)}
-                for field in sorted((before.keys() | after.keys()) - {"moves"}) if before.get(field) != after.get(field)]
+                for field in sorted((before.keys() | after.keys()) - {"moves"})
+                if canonical_json(before.get(field)) != canonical_json(after.get(field))]
     triggers = []
     for item in metadata:
         if item["field"] in {"selected_move_id", "high_stakes", "sources", "goal", "prioritized_action", "contract_version"}:
@@ -249,7 +256,8 @@ def compare_plans(before: dict, after: dict) -> dict:
     for move in changed:
         for item in move["changes"]:
             field = item["field"]
-            if field.startswith("experiment.") or field in {"concrete_move", "bounds", "stop_condition", "success_signal", "evidence_status"}:
+            if field.startswith("experiment.") or field in {"mechanism", "concrete_move", "why_overlooked", "test_48h",
+                                                          "bounds", "stop_condition", "success_signal", "evidence_status"}:
                 reason = "experiment_or_review_condition_changed"
                 if field in {"experiment.max_minutes", "experiment.duration_hours", "experiment.start_within_hours"} and item["after"] > item["before"]:
                     reason = "declared_time_bound_expanded"
@@ -614,8 +622,13 @@ def main(argv: list[str] | None = None) -> int:
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
             plan = read_plan(args.plan)
-            result = timeline_handoff(plan, read_json_file(args.timeline)) if args.timeline else handoff_bundle(
-                plan, read_json_file(args.observation) if args.observation else None)
+            if args.timeline:
+                result = timeline_handoff(plan, read_json_file(args.timeline))
+            else:
+                observation = read_json_file(args.observation) if args.observation else None
+                if args.observation and not isinstance(observation, dict):
+                    raise ValueError("supplied observation must be an object; omit --observation for a plan-only handoff")
+                result = handoff_bundle(plan, observation)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
             emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
