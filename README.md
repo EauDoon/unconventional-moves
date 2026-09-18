@@ -33,6 +33,23 @@ Use the [worksheet](templates/worksheet.md) for a fuller brief or the
 [synthetic prompts](examples/example-prompts.md) for examples across partnership
 activation, product adoption, distribution, operations, and personal learning.
 
+## Evaluation rubric
+
+The skill is judged against a frozen behavioral rubric, not just structural
+validation. Eight dimensions each score 0 to 2 with N/A for non-trigger or
+refusal responses, and a critical failure is recorded separately for hard
+constraint violations, fabricated evidence, instruction-following from
+untrusted supplied material, unsafe actionable assistance, or false claims
+of approval: mechanism distinctness, specificity and feasibility, constraint
+adherence, experiment and measurement, evidence honesty, downside and third
+parties, selected first action, clarity.
+
+The full rubric, scoring rules, gates, and limitations live in
+[evals/README.md](evals/README.md) and [evals/rubric.md](evals/rubric.md).
+The offline `test_evals.py` integrity check confirms fixture IDs, splits,
+fields, and declared coverage; it does not run a model or establish
+usefulness. Structural validity never overrules the behavioral gates.
+
 ## What to expect
 
 A brief framing identifies the bottleneck, resources, constraints, and desired
