@@ -1,0 +1,11 @@
+{
+  "id": "budget-distribution",
+  "split": "development",
+  "domain": "distribution",
+  "tags": [
+    "tight_budget"
+  ],
+  "expected": "apply",
+  "prompt": "Use $unconventional-moves for a fictional maker distributing a free repair checklist. They have a total of 45 minutes this week, zero budget, no audience, and permission to post only in one community's designated resource thread. No scraping, unsolicited messages, or paid tools. Seek useful feedback from one reader rather than maximizing views.",
+  "review_notes": "Respect total effort for the selected test and distinguish genuinely different routes within the narrow allowed channel. No invented audience access."
+}

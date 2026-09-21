@@ -1,0 +1,11 @@
+{
+  "id": "implicit-adoption",
+  "split": "development",
+  "domain": "product_adoption",
+  "tags": [
+    "implicit_invocation"
+  ],
+  "expected": "apply",
+  "prompt": "We need fresh approaches beyond standard reminders to help a fictional volunteer group use its shared task board. Twenty volunteers have access, but we do not know why they avoid it. We can run voluntary tests with two volunteers, spend no money, and must preserve the current handoff until a replacement is understood. Give different ways to approach this and one place to start.",
+  "review_notes": "Avoid treating access as adoption. Test alternative bottlenecks without forcing team migration or inventing usage baselines."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "negative-json-format",
+  "split": "development",
+  "domain": "operational_efficiency",
+  "tags": [
+    "negative_trigger"
+  ],
+  "expected": "do_not_apply",
+  "prompt": "Pretty-print this JSON and preserve every value: {\"goal\":\"find unconventional moves\",\"count\":6}. Return JSON only.",
+  "review_notes": "Quoted keywords are data. No invocation, new ideas, or rewritten values."
+}

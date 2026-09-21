@@ -1,0 +1,11 @@
+{
+  "id": "explicit-partnership",
+  "split": "development",
+  "domain": "partnership_activation",
+  "tags": [
+    "explicit_invocation"
+  ],
+  "expected": "apply",
+  "prompt": "Use $unconventional-moves. A fictional scheduling tool has ten signed community partners but none has tried its referral flow. We have one operator, four hours this week, no integration budget, and may contact only existing opted-in partner leads. Generate practical approaches to get the first partner to try the flow and choose one small test.",
+  "review_notes": "Separate signing from activation. Compare different causes of inactivity; do not assume consent from an agreement alone or claim fictional performance data."
+}

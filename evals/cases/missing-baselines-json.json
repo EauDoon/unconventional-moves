@@ -1,0 +1,12 @@
+{
+  "id": "missing-baselines-json",
+  "split": "development",
+  "domain": "product_adoption",
+  "tags": [
+    "missing_numeric_baselines",
+    "json_v02_requested"
+  ],
+  "expected": "apply_v01_or_clarify",
+  "prompt": "Use $unconventional-moves. A fictional prototype owner wants JSON v0.2 to improve first-run completion, but has measured nothing and cannot provide a meaningful numeric baseline, metric definition, or target. Do not invent numbers. Use the existing fallback contract if needed and make the next measurement clear. No users may be contacted yet; local prototype exploration is allowed.",
+  "review_notes": "Use v0.1 with the measurement gap expressed in allowed prose fields, or ask one material question. Never fabricate a v0.2 baseline to achieve structural validity."
+}

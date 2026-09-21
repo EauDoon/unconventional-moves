@@ -1,0 +1,12 @@
+{
+  "id": "json-v02-learning",
+  "split": "development",
+  "domain": "personal_learning",
+  "tags": [
+    "json_v02"
+  ],
+  "expected": "apply",
+  "json_contract": "unconventional-moves/v0.2",
+  "prompt": "Use $unconventional-moves and return only JSON using the bundled v0.2 contract. In this synthetic scenario, a learner completed one two-minute spoken practice session during the last comparable 24-hour period; the agreed experimental target is two completed sessions in the next 24 hours, not a prediction. Generate five different self-only ways to test this within 15 total active minutes, zero money, and a start in 24 hours. Every experiment lasts 24 hours and uses completed sessions per 24 hours as its metric, baseline 1 and target 2. No recording or data sharing. Choose exactly one move to try.",
+  "review_notes": "Keep provided numeric values, distinguish stipulated targets from measured outcomes, bind selected ID and recommendation, preserve versioned duration limits and rollback."
+}

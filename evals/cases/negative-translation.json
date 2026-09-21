@@ -1,0 +1,11 @@
+{
+  "id": "negative-translation",
+  "split": "development",
+  "domain": "personal_learning",
+  "tags": [
+    "negative_trigger"
+  ],
+  "expected": "do_not_apply",
+  "prompt": "Translate this sentence into Spanish, with no explanation: I will practice tomorrow.",
+  "review_notes": "Return the translation directly; learning subject matter alone does not justify a strategic portfolio."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "cosmetic-distribution",
+  "split": "development",
+  "domain": "distribution",
+  "tags": [
+    "near_duplicates"
+  ],
+  "expected": "apply",
+  "prompt": "Use $unconventional-moves to improve discovery of a fictional local skill-sharing guide. Our current ideas are email it to clubs, email it to libraries, send it to student groups, post it on social media, and post it in a forum. These feel too similar. We have two hours, a public demo, and one consenting librarian; no bulk outreach. Replace them with a mechanism-distinct set and select one test.",
+  "review_notes": "Changing recipient or channel does not by itself change the mechanism. Judge causal diversity, not mechanism label uniqueness."
+}
