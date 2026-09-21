@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Export checkpoint histories as spreadsheet-safe CSV with measurements, exact progress strings, original notes, and persistent stop decisions.
 - Reject explicitly supplied null observations instead of silently exporting plan-only handoffs.
