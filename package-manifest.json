@@ -11,6 +11,8 @@
   "docs/local-workflow.md",
   "docs/release-notes-v0.1.0.md",
   "docs/release-notes-v0.2.0.md",
+  "docs/usage-recipes.md",
+  "docs/version-decision.md",
   "evals/README.md",
   "evals/cases.json",
   "evals/results.json",

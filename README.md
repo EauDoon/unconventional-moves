@@ -159,6 +159,18 @@ of 0 to 48 hours and duration of 1 to 48 hours. Test a narrow uncertainty within
 that window rather than implying a long-term hypothesis has been proved.
 The installed skill bundles both schemas and its strategy review reference.
 
+## Integration notes
+
+For concrete offline workflows using the bundled examples, see
+[usage recipes](docs/usage-recipes.md); five copy-paste recipes cover v0.1
+rendering, v0.2 selection and cards, the synthetic outcome replay,
+cumulative checkpoint histories with CSV export, and the combined
+constraint shortlist and source date audit. To choose between the two
+schema versions using the actual required fields, the experiment card
+bounds, and the CLI version gate, see the
+[version decision tree](docs/version-decision.md). Both docs rely only on
+files and commands that ship in this repository.
+
 ## Validate and package
 
 From the repository root:
