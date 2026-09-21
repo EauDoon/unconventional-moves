@@ -1,5 +1,9 @@
 # Unconventional Moves
 
+[![build](https://img.shields.io/github/actions/workflow/status/EauDoon/unconventional-moves/ci.yml?branch=main)](https://github.com/EauDoon/unconventional-moves/actions)
+[![license](https://img.shields.io/github/license/EauDoon/unconventional-moves)](https://github.com/EauDoon/unconventional-moves/blob/main/LICENSE)
+[![last commit](https://img.shields.io/github/last-commit/EauDoon/unconventional-moves)](https://github.com/EauDoon/unconventional-moves)
+
 Turn a constrained goal into five to seven practical approaches that work through
 different mechanisms, then choose one small experiment worth starting.
 
