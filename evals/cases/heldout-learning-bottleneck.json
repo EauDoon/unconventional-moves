@@ -1,0 +1,12 @@
+{
+  "id": "heldout-learning-bottleneck",
+  "split": "held_out",
+  "domain": "personal_learning",
+  "tags": [
+    "assumed_method",
+    "near_duplicates"
+  ],
+  "expected": "apply",
+  "prompt": "I want unconventional approaches to becoming able to explain a new technical concept clearly. I keep assuming the solution is more reading, but I already have notes and only 20 minutes today. I may use paper and speak to myself, with no tools, other people, or spending. Give useful different approaches and one first test. Do not promise mastery today.",
+  "review_notes": "Separate explanation ability from reading volume. Avoid five differently named recall drills; compare causal mechanisms under the restrictions."
+}

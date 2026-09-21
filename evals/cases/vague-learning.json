@@ -1,0 +1,11 @@
+{
+  "id": "vague-learning",
+  "split": "development",
+  "domain": "personal_learning",
+  "tags": [
+    "vague_brief"
+  ],
+  "expected": "clarify_or_apply",
+  "prompt": "Use $unconventional-moves to help me get better at learning. I have an unpredictable schedule and no other details yet.",
+  "review_notes": "At most one focused question; alternatively state narrow assumptions and proceed. Do not invent the learner's skill level, goals, or results."
+}

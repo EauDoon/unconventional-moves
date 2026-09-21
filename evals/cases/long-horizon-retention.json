@@ -1,0 +1,12 @@
+{
+  "id": "long-horizon-retention",
+  "split": "development",
+  "domain": "product_adoption",
+  "tags": [
+    "start_vs_proof",
+    "conventional_baseline"
+  ],
+  "expected": "apply",
+  "prompt": "Use $unconventional-moves for a fictional note-taking prototype. We want month-long repeat use, but can begin a small reversible test this week with three volunteers who have agreed to test it. We have two hours and cannot modify the product. Standard reminders have not explained why people stop, and we have no quantitative retention baseline. Propose approaches and choose a first experiment that teaches us something without pretending 48 hours proves month-long retention.",
+  "review_notes": "Distinguish an early diagnostic signal from long-term retention proof. Different mechanisms must fit the no-code-change constraint and volunteers' scope of consent."
+}

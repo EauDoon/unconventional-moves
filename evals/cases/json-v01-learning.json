@@ -1,0 +1,12 @@
+{
+  "id": "json-v01-learning",
+  "split": "development",
+  "domain": "personal_learning",
+  "tags": [
+    "json_v01"
+  ],
+  "expected": "apply",
+  "json_contract": "unconventional-moves/v0.1",
+  "prompt": "Use $unconventional-moves and return only JSON using the bundled v0.1 contract. A fictional beginner wants to practice explaining a concept aloud on irregular workdays. They have ten minutes a day, no budget, a phone recorder, and no participants. Produce five distinct approaches with one prioritized action. No measured baseline is available.",
+  "review_notes": "Validate structure separately from usefulness. No extra JSON fields, invented baseline, or unsupported efficacy claims."
+}

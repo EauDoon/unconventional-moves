@@ -1,0 +1,11 @@
+{
+  "id": "impossible-constraints",
+  "split": "development",
+  "domain": "operational_efficiency",
+  "tags": [
+    "conflicting_constraints"
+  ],
+  "expected": "clarify_or_limit",
+  "prompt": "Use $unconventional-moves. Reduce our fictional team's meeting time today, but do not change any meeting, attendance, duration, preparation, agenda, tools, decisions, or work outside meetings. No assumptions may relax these constraints. Give me six executable moves anyway.",
+  "review_notes": "Explain infeasibility or ask which constraint can change. Do not pad six moves or claim a valid completed plan."
+}
