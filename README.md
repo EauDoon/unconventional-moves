@@ -137,6 +137,15 @@ for spreadsheet review of measurements, progress, notes, and persistent stops.
 Missing measurements remain distinct from measured zero; JSON remains the source
 record.
 
+To pick up work from an exported handoff, run
+`python scripts/moves.py unpack-handoff handoff.json --output-dir restored`.
+It verifies the bundle before restoring the exact plan and every supplied
+checkpoint into a new directory. Read `restored/resume-review.json` before
+further work; earlier stops remain active. Follow the
+[handoff recovery walkthrough](docs/resuming-handoffs.md), or run
+`python examples/replay-handoff.py --output replay` for a complete synthetic
+selection, handoff, recovery, checkpoint, and revision replay.
+
 A successful command exit means a report was produced. Exit 0 does not mean an
 experiment succeeded or was approved; 1 means invalid input or a file error,
 and 2 means invalid command arguments. Read the outcome, warnings, and stop

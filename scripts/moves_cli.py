@@ -14,7 +14,7 @@ Rules:
 - plan-required commands at argv[1]:
   v0.2-only commands on a v0.1 plan are refused with exit 1.
   shared commands pass through to moves.main() unchanged.
-- plan-less commands (init, verify-handoff): pass through directly.
+- plan-less commands (init, verify-handoff, unpack-handoff): pass through directly.
 - unknown contract_version: refused with exit 1.
 - no argv: delegated so argparse prints its usage.
 """
@@ -44,7 +44,7 @@ SHARED_COMMANDS = frozenset({
 })
 
 # Commands that take no plan argument and skip version detection.
-NO_PLAN_COMMANDS = frozenset({"init", "verify-handoff"})
+NO_PLAN_COMMANDS = frozenset({"init", "verify-handoff", "unpack-handoff"})
 
 
 def detect_version(plan_path: Path) -> str | None:

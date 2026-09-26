@@ -73,6 +73,17 @@ retain their `null` observation and remain supported by `verify-handoff`.
 
 Use `handoff draft.json --timeline checkpoints.json --output history-handoff.json` to include the entire supplied cumulative history in a version 0.2 handoff. `--timeline` and `--observation` are mutually exclusive. `verify-handoff` accepts both versions and recomputes the timeline review plus an observation digest that covers notes as well as numbers. Earlier stops cannot be hidden by only exporting the latest derived review. The tool cannot detect omitted historical records or a fully rewritten consistent unsigned bundle, so reviewers must still establish completeness themselves.
 
+Recover the editable source records with
+`python scripts/moves.py unpack-handoff history-handoff.json --output-dir restored`.
+The new directory contains the verified source handoff, unchanged parsed plan,
+all supplied checkpoints, a recomputed `resume-review.json`, and a README.
+The directory must not already exist, and its parent must exist. Invalid inputs
+produce no directory. Existing files, directories, and destination symlinks are
+refused. Recovering records never clears a stop or approves a test. See
+[resuming handoffs](resuming-handoffs.md) for both handoff versions, empty
+histories, cumulative record commands, revision separation, and a runnable
+synthetic walkthrough.
+
 ## Printable card
 
 Export a focused printable card with all declared experiment bounds, rollback, stop condition, digest, and unchecked human review checklist:
