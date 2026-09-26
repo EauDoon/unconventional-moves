@@ -314,6 +314,79 @@ def timeline_handoff(plan: dict, observations: object) -> dict:
     return bundle
 
 
+def unpack_handoff(bundle: object, output_dir: Path) -> dict:
+    """Restore verified source records for review, never approve continuation."""
+    verification = verify_handoff(bundle)
+    plan = bundle["plan"]
+    if bundle["contract_version"] == "unconventional-moves/handoff-v0.2":
+        observations = bundle["observations"]
+    else:
+        observations = [] if bundle["observation"] is None else [bundle["observation"]]
+    timeline = review_timeline(plan, observations) if observations else None
+    report = {"source_contract_version": bundle["contract_version"],
+              "plan_sha256": verification["plan_sha256"], "move_id": verification["move_id"],
+              "checkpoint_count": len(observations), "human_review_required": True,
+              "decision": timeline["decision"] if timeline else "human_review_required",
+              "reasons": timeline["reasons"] if timeline else [],
+              "first_stop_checkpoint": timeline["first_stop_checkpoint"] if timeline else None,
+              "observations_after_stop": timeline["observations_after_stop"] if timeline else False,
+              "timeline_review": timeline,
+              "limitation": "Only supplied records were restored. Internal consistency does not establish "
+                            "completeness, authorship, factual truth, consent, approval, or permission to continue."}
+    records = {"plan.json": plan, "checkpoints.json": observations,
+               "handoff.json": bundle, "resume-review.json": report}
+    # Validate and encode everything before creating the destination. Preserve
+    # parsed JSON numbers and strings; never rebind observations to a new plan.
+    files = {}
+    for name, value in records.items():
+        encoded = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode("utf-8")
+        if len(encoded) > MAX_PLAN_BYTES:
+            raise ValueError("restored " + name + " exceeds the supported JSON byte limit")
+        files[name] = encoded
+    files["README.md"] = ("# Restored experiment records\n\n"
+        "Decision: " + report["decision"] + "\n\n"
+        "Supplied checkpoints: " + str(len(observations)) + "\n\n"
+        "Human review is required. Unpacking starts no test and grants no approval or consent.\n\n"
+        "- `handoff.json` retains the verified source bundle; keep it as the original record.\n"
+        "- `plan.json` retains the exact parsed plan revision and selected move.\n"
+        "- `checkpoints.json` retains every supplied observation in order, including notes, missing values, and zeros.\n"
+        "- `resume-review.json` recomputes the full timeline and persistent stop reasons. Read it before further work.\n\n"
+        "Use the repository or extracted package CLI with paths to these files. Review a nonempty history "
+        "with `timeline`, `limits`, or `debrief`. An empty history means no observations were supplied; "
+        "it is not evidence that no earlier activity occurred.\n\n"
+        "For a later reported checkpoint, use `observation-draft` with this plan, fill in actual "
+        "cumulative times and honest observations, then use `record` with `--history` pointing to "
+        "this checkpoints file and a fresh `--output` path. Do not copy only the latest observation "
+        "or reset cumulative times. Earlier stops remain active even when later entries clear their flags.\n\n"
+        "Keep revisions separate: use `select` or edit a copy, then `compare` and prepare a new card "
+        "and observation draft. Keep this history with its original plan; never rewrite its digest. "
+        "Selection and revision do not approve another trial.\n\n" + report["limitation"] + "\n").encode("utf-8")
+    # mkdir is exclusive, including existing empty directories and symlinks.
+    # Use fixed filenames only; no authored content controls output paths.
+    output_dir.mkdir()
+    created = []
+    try:
+        for name, encoded in files.items():
+            path = output_dir / name
+            with path.open("xb") as handle:
+                created.append(path)
+                handle.write(encoded)
+    except BaseException:
+        # Clean only files this invocation created. Never remove unrelated files
+        # that another process may have added to the directory.
+        for path in reversed(created):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        try:
+            output_dir.rmdir()
+        except OSError:
+            pass
+        raise
+    return report
+
+
 def screen_moves(plan: dict, max_minutes: int, exposure: str,
                  max_start_hours: int | None = None, max_duration_hours: int | None = None) -> dict:
     selected_move(plan)
@@ -612,6 +685,9 @@ def main(argv: list[str] | None = None) -> int:
     verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
     verify.add_argument("bundle", type=Path)
     verify.add_argument("--output", type=Path)
+    unpack = commands.add_parser("unpack-handoff", help="Verify a handoff and restore its complete supplied history for review")
+    unpack.add_argument("bundle", type=Path)
+    unpack.add_argument("--output-dir", type=Path, required=True)
     review = commands.add_parser("review", help="Flag repeated text and unclear evidence labels for human review")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
@@ -657,6 +733,9 @@ def main(argv: list[str] | None = None) -> int:
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
             emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
+        elif args.command == "unpack-handoff":
+            result = unpack_handoff(read_json_file(args.bundle), args.output_dir)
+            emit(json.dumps(result, indent=2) + "\n", None)
         elif args.command == "screen":
             result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure,
                                   args.max_start_hours, args.max_duration_hours)

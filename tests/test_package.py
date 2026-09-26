@@ -20,6 +20,39 @@ OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_extracted_package_replays_verified_handoff_recovery(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = subprocess.run([sys.executable, str(ROOT / "scripts/package.py"),
+                                     "--output", str(root / "dist")], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(next((root / "dist").glob("*.zip"))) as archive:
+                archive.extractall(root / "extracted")
+            package = root / "extracted" / ("unconventional-moves-" + version_for(ROOT))
+            # Run away from both the checkout and package; use only shipped files.
+            replay = root / "replay"
+            result = subprocess.run([sys.executable, str(package / "examples/replay-handoff.py"),
+                                     "--output", str(replay)], cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads((replay / "replay-summary.json").read_text(encoding="utf-8"))
+            self.assertTrue(summary["synthetic_only"])
+            self.assertEqual(summary["decision"], "stop_and_review")
+            self.assertEqual(summary["restored_checkpoints"], 3)
+            self.assertTrue(summary["old_history_rejected_for_revision"])
+            for args in (["scripts/validate.py"],
+                         ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
+                          "--output-dir", str(root / "shim-restored")],
+                         ["scripts/moves.py", "render", "examples/example-plan.json"]):
+                result = subprocess.run([sys.executable, *args], cwd=package, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            # Neither replay nor recovery may overwrite an earlier result.
+            original = (replay / "replay-summary.json").read_bytes()
+            result = subprocess.run([sys.executable, str(package / "examples/replay-handoff.py"),
+                                     "--output", str(replay)], cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual((replay / "replay-summary.json").read_bytes(), original)
+
     def test_same_environment_builds_are_identical_and_complete(self):
         import hashlib
         import zipfile

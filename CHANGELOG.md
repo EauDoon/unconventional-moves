@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `unpack-handoff` to verify a handoff before restoring its exact plan and complete supplied checkpoint history into a new directory, with persistent stop decisions and pending human review.
+- Include a runnable synthetic recovery and revision walkthrough, clean extracted-package coverage, and the documented version-aware CLI shim in the package.
+
 ## 0.3.0
 
 - Export checkpoint histories as spreadsheet-safe CSV with measurements, exact progress strings, original notes, and persistent stop decisions.
