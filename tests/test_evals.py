@@ -2,6 +2,7 @@
 
 import json
 import hashlib
+import re
 from collections import Counter
 from pathlib import Path
 import unittest
@@ -41,6 +42,26 @@ def paired_dimension_changes(scored: list[dict]) -> dict:
             for dimension, counts in changes.items()}
 
 
+def rubric_dimensions(rubric_text: str) -> set:
+    """Dimension keys documented by the frozen rubric table.
+
+    Recorded keys drop a joining "and", so "Downside and third parties" scores
+    as downside_third_parties. A new rubric row that does not follow that rule
+    fails here instead of being scored under an unrecognised key.
+    """
+    table = rubric_text.split("## Gates and judgments")[0]
+    keys = set()
+    for line in table.splitlines():
+        if not line.startswith("|"):
+            continue
+        name = line.split("|")[1].strip()
+        if not name or set(name) <= {"-", ":", " "}:
+            continue
+        keys.add(re.sub(r"[^a-z0-9]+", "_", name.lower().replace(" and ", " ")).strip("_"))
+    keys.discard("dimension")
+    return keys
+
+
 class EvaluationFixtureTests(unittest.TestCase):
     def test_recorded_probe_integrity_not_semantic_quality(self):
         records = [json.loads(line) for line in (ROOT / "evals/session-probe.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -68,7 +89,7 @@ class EvaluationFixtureTests(unittest.TestCase):
         for row in scored:
             self.assertEqual(set(row["candidates"]), {"baseline", "revised"})
             for candidate in row["candidates"].values():
-                self.assertEqual(len(candidate["scores"]), 8)
+                self.assertEqual(set(candidate["scores"]), self.rubric_dimensions)
                 for dimension in candidate["scores"].values():
                     self.assertIn(dimension["score"], (None, 0, 1, 2))
                     self.assertTrue(dimension["evidence"].strip())
@@ -90,6 +111,8 @@ class EvaluationFixtureTests(unittest.TestCase):
             (ROOT / "evals" / "cases.json").read_text(encoding="utf-8"),
             object_pairs_hook=unique_object,
         )
+        cls.rubric_dimensions = rubric_dimensions(
+            (ROOT / "evals" / "rubric.md").read_text(encoding="utf-8"))
 
     def test_fixture_shape_and_unique_prompts(self):
         self.assertEqual(self.suite["suite_version"], "unconventional-moves-behavior/v1")
