@@ -551,3 +551,37 @@ class FullWorkflowTests(unittest.TestCase):
         self.assertEqual(set(fields["properties"]), EXPERIMENT_FIELDS)
         self.assertEqual(fields["properties"]["start_within_hours"]["maximum"], 48)
         self.assertEqual(fields["properties"]["duration_hours"]["maximum"], 48)
+
+
+class VersionGateTests(unittest.TestCase):
+    """The shim exists to refuse a v0.1 plan at the CLI boundary, not later."""
+
+    def run_shim(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "scripts/moves_cli.py"), *args],
+                              capture_output=True, text=True)
+
+    def test_v02_only_commands_are_refused_before_moves_runs(self):
+        from moves_cli import V02_REQUIRED_COMMANDS
+        v01 = str(ROOT / "examples/example-plan.json")
+        for command in sorted(V02_REQUIRED_COMMANDS):
+            with self.subTest(command=command):
+                result = self.run_shim(command, v01)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("requires a v0.2 plan", result.stderr)
+                self.assertNotIn("experiment workflow requires", result.stderr)
+
+    def test_shared_commands_still_accept_a_v01_plan(self):
+        from moves_cli import SHARED_COMMANDS
+        v01 = str(ROOT / "examples/example-plan.json")
+        for command, extra in (("render", ()), ("review", ()), ("sources", ("--as-of", "2026-09-21", "--max-age-days", "30"))):
+            with self.subTest(command=command):
+                self.assertIn(command, SHARED_COMMANDS)
+                self.assertEqual(self.run_shim(command, v01, *extra).returncode, 0)
+
+    def test_unsupported_version_is_refused_for_a_gated_command(self):
+        with tempfile.TemporaryDirectory() as td:
+            plan = Path(td) / "plan.json"
+            plan.write_text(json.dumps({**example(), "contract_version": "unconventional-moves/v9.9"}))
+            result = self.run_shim("render", str(plan))
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("unsupported contract_version", result.stderr)

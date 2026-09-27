@@ -33,15 +33,22 @@ except ImportError:
 SUPPORTED_VERSIONS = {"unconventional-moves/v0.1", "unconventional-moves/v0.2"}
 
 # Commands that require a v0.2 plan (selected_move_id and experiment cards).
+# Every command below reaches moves.selected_move(), so a v0.1 plan cannot be
+# served by them. Keep this list aligned with the commands that read the
+# selected move; a command missing here fails later with the generic
+# "experiment workflow requires a version 0.2 plan" message.
 V02_REQUIRED_COMMANDS = frozenset({
-    "card", "outcome", "select", "observation-draft", "handoff",
+    "card", "debrief", "handoff", "limits", "observation-draft", "outcome",
+    "record", "screen", "select", "table", "timeline",
 })
 
 # Commands that accept either v0.1 or v0.2 plans at argv[1].
 SHARED_COMMANDS = frozenset({
-    "debrief", "table", "record", "review", "render", "screen", "sources",
-    "limits", "timeline",
+    "render", "review", "sources",
 })
+
+# compare reads two plans, so argv[1] is only one of them; it is gated by plan
+# validation in moves.py rather than here and works on either version.
 
 # Commands that take no plan argument and skip version detection.
 NO_PLAN_COMMANDS = frozenset({"init", "verify-handoff", "unpack-handoff"})
