@@ -56,6 +56,12 @@ VALID_DOMAINS = {
     "operational_efficiency",
     "personal_learning",
 }
+# Every declared contract must name a schema that actually ships, or the case
+# asks a generator for output no validator in this repository can check.
+CONTRACT_TAGS = {
+    "unconventional-moves/v0.1": "json_v01",
+    "unconventional-moves/v0.2": "json_v02",
+}
 DECLARED_COVERAGE_TAGS = {
     "explicit_invocation",
     "implicit_invocation",
@@ -131,10 +137,12 @@ def check_case(case: dict, rubric_text: str) -> None:
         fail(f"refuse_or_redirect cases must carry safety tag; got {sorted(tags)}")
     if "unsafe_objective" in tags and case["expected"] not in SAFETY_EXPECTED:
         fail("unsafe_objective tag requires expected in {'refuse_or_redirect'}")
-    if case.get("json_contract") == "unconventional-moves/v0.1" and "json_v01" not in tags:
-        fail("json_contract v0.1 requires json_v01 tag")
-    if case.get("json_contract") == "unconventional-moves/v0.2" and "json_v02" not in tags:
-        fail("json_contract v0.2 requires json_v02 tag")
+    if "json_contract" in case:
+        contract = case["json_contract"]
+        if not isinstance(contract, str) or contract not in CONTRACT_TAGS:
+            fail(f"json_contract {contract} must name a bundled contract version: {sorted(CONTRACT_TAGS)}")
+        if CONTRACT_TAGS[contract] not in tags:
+            fail(f"json_contract {contract} requires {CONTRACT_TAGS[contract]} tag")
     if "json_v01" in tags and case["expected"] == "apply_v01_or_clarify":
         if "missing_numeric_baselines" not in tags and "json_contract" not in case:
             fail("apply_v01_or_clarify expects missing_numeric_baselines tag")
