@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Refuse a version 0.1 plan at the version gate for every command that reads the selected move, instead of failing later with a generic workflow message.
 - Add `unpack-handoff` to verify a handoff before restoring its exact plan and complete supplied checkpoint history into a new directory, with persistent stop decisions and pending human review.
 - Include a runnable synthetic recovery and revision walkthrough, clean extracted-package coverage, and the documented version-aware CLI shim in the package.
 
