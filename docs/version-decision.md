@@ -55,11 +55,15 @@ The version-aware shim reads `contract_version` from the plan at `argv[1]`
 and refuses v0.2-only commands against a v0.1 plan with exit 1, before
 `moves.py` runs.
 
-- v0.2-only commands: `card`, `outcome`, `select`, `observation-draft`,
-  `handoff`.
-- Commands that accept either version: `debrief`, `table`, `record`,
-  `review`, `render`, `screen`, `sources`, `limits`, `timeline`.
-- Commands with no plan argument: `init`, `verify-handoff`.
+- v0.2-only commands: `card`, `debrief`, `handoff`, `limits`,
+  `observation-draft`, `outcome`, `record`, `screen`, `select`, `table`,
+  `timeline`. All of them read the selected move, so none can serve a
+  v0.1 plan.
+- Commands that accept either version: `render`, `review`, `sources`.
+- `compare` takes two plans, so it is gated by plan validation in
+  `moves.py` rather than by the shim, and it works on either version.
+- Commands with no plan argument: `init`, `verify-handoff`,
+  `unpack-handoff`.
 
 The shim also refuses any `contract_version` outside the two supported
 strings. Unknown versions do not pass through to `moves.py`.
@@ -70,7 +74,7 @@ strings. Unknown versions do not pass through to `moves.py`.
   Inventing a number to satisfy v0.2 produces an experiment card whose
   metric and target are unverified declarations, not measured evidence.
 - You only need a free-text plan, a Markdown or HTML render, a review
-  report, or a constraint shortlist. Every shared command accepts v0.1.
+  report, or a source date audit. Those three commands accept v0.1.
 - The plan is high stakes and the only sources you can supply are
   declared, not verified. v0.2 would not improve the source situation
   and adds no new source field.
