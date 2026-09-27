@@ -19,6 +19,28 @@ def unique_object(pairs):
     return result
 
 
+def paired_dimension_changes(scored: list[dict]) -> dict:
+    """Recount better, same, and worse per rubric dimension from the records.
+
+    Only primary pairs count, and a pair where either side is N/A is excluded
+    rather than scored, matching the recorded limitation that N/A dimensions
+    are not passing scores.
+    """
+    changes: dict = {}
+    for row in scored:
+        if row["repeat"]:
+            continue
+        baseline = row["candidates"]["baseline"]["scores"]
+        for dimension, cell in row["candidates"]["revised"]["scores"].items():
+            before, after = baseline[dimension]["score"], cell["score"]
+            if before is None or after is None:
+                continue
+            bucket = changes.setdefault(dimension, Counter())
+            bucket["better" if after > before else "worse" if after < before else "same"] += 1
+    return {dimension: {outcome: counts[outcome] for outcome in ("better", "same", "worse")}
+            for dimension, counts in changes.items()}
+
+
 class EvaluationFixtureTests(unittest.TestCase):
     def test_recorded_probe_integrity_not_semantic_quality(self):
         records = [json.loads(line) for line in (ROOT / "evals/session-probe.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -60,6 +82,7 @@ class EvaluationFixtureTests(unittest.TestCase):
                          results["preferences"]["held_out"])
         self.assertEqual(dict(Counter(row["preference"] for row in scored if row["repeat"])),
                          results["preferences"]["repeats"])
+        self.assertEqual(paired_dimension_changes(scored), results["paired_dimension_changes"])
 
     @classmethod
     def setUpClass(cls):
