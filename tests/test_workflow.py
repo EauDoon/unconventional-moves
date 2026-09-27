@@ -552,6 +552,37 @@ class FullWorkflowTests(unittest.TestCase):
         self.assertEqual(fields["properties"]["start_within_hours"]["maximum"], 48)
         self.assertEqual(fields["properties"]["duration_hours"]["maximum"], 48)
 
+    def test_published_schemas_agree_with_the_python_validator(self):
+        from validate_plan import MOVE_FIELDS, SOURCE_FIELDS, TOP_LEVEL_FIELDS
+        for filename, version in (("moves.schema.json", "unconventional-moves/v0.1"),
+                                  ("moves-v0.2.schema.json", "unconventional-moves/v0.2")):
+            with self.subTest(schema=filename):
+                schema = json.loads((ROOT / "schemas" / filename).read_text())
+                moves = schema["properties"]["moves"]
+                sources = schema["properties"]["sources"]["items"]
+                top = set(TOP_LEVEL_FIELDS) | ({"selected_move_id"} if version.endswith("v0.2") else set())
+                move = set(MOVE_FIELDS) | ({"experiment"} if version.endswith("v0.2") else set())
+                self.assertEqual(set(schema["required"]), top)
+                self.assertEqual(set(schema["properties"]), top)
+                self.assertEqual(set(moves["items"]["required"]), move)
+                self.assertEqual(set(moves["items"]["properties"]), move)
+                self.assertEqual((moves["minItems"], moves["maxItems"]), (5, 7))
+                self.assertEqual(set(sources["properties"]), SOURCE_FIELDS)
+                self.assertEqual(set(sources["required"]), set(SOURCE_FIELDS) - {"publisher", "date"})
+
+    def test_schema_move_count_bounds_match_the_validator(self):
+        for filename in ("moves.schema.json", "moves-v0.2.schema.json"):
+            moves = json.loads((ROOT / "schemas" / filename).read_text())["properties"]["moves"]
+            low, high = moves["minItems"], moves["maxItems"]
+            counts = list(range(1, low)) + list(range(low, high + 1)) + list(range(high + 1, high + 3))
+            for count in counts:
+                plan = bounded_example()
+                plan["moves"] = [dict(plan["moves"][0], id=f"move-{index:02d}") for index in range(1, count + 1)]
+                plan["selected_move_id"] = "move-01"
+                rejected = "moves must contain five to seven entries" in validate_plan_data(plan)
+                with self.subTest(schema=filename, moves=count):
+                    self.assertEqual(rejected, not low <= count <= high)
+
 
 class VersionGateTests(unittest.TestCase):
     """The shim exists to refuse a v0.1 plan at the CLI boundary, not later."""
