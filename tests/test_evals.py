@@ -62,6 +62,47 @@ def rubric_dimensions(rubric_text: str) -> set:
     return keys
 
 
+# The longest phrase the tuning surface legitimately shares with a held-out
+# prompt is the six-word invocation boilerplate, so a longer verbatim run is a
+# quote rather than shared vocabulary.
+HELD_OUT_NGRAM = 7
+TUNING_SURFACE_DIRS = ("skill", "docs", "templates", "examples")
+TUNING_SURFACE_FILES = ("README.md", "CONTRIBUTING.md", "CHANGELOG.md", "PROVENANCE.md", "SECURITY.md")
+
+
+def _ngrams(tokens: list[str], size: int) -> set:
+    return {tuple(tokens[index:index + size]) for index in range(len(tokens) - size + 1)}
+
+
+def held_out_prompt_leaks() -> list[str]:
+    """Report tuning files that quote a held-out prompt.
+
+    CONTRIBUTING requires held-out cases to stay separate from tuning and
+    evals/README.md repeats it. Reservation metadata was checked; the text of a
+    held-out prompt appearing in the skill or its guidance was not.
+    """
+    surface = {}
+    for relative in TUNING_SURFACE_DIRS:
+        surface.update({path: path.read_text(encoding="utf-8")
+                        for path in (ROOT / relative).rglob("*")
+                        if path.is_file() and path.suffix in (".md", ".yaml")})
+    surface.update({ROOT / name: (ROOT / name).read_text(encoding="utf-8")
+                    for name in TUNING_SURFACE_FILES if (ROOT / name).is_file()})
+    surface_grams = {path: _ngrams(re.findall(r"[a-z0-9]+", text.lower()), HELD_OUT_NGRAM)
+                     for path, text in surface.items()}
+    suite = json.loads((ROOT / "evals" / "cases.json").read_text(encoding="utf-8"))
+    leaks = []
+    for case in suite["cases"]:
+        if case["split"] != "held_out":
+            continue
+        quoted = _ngrams(re.findall(r"[a-z0-9]+", case["prompt"].lower()), HELD_OUT_NGRAM)
+        for path, grams in surface_grams.items():
+            overlap = sorted(" ".join(gram) for gram in quoted & grams)
+            if overlap:
+                leaks.append(f"{case['id']} quoted in {path.relative_to(ROOT).as_posix()}: {overlap[0]}")
+    return sorted(leaks)
+
+
 class EvaluationFixtureTests(unittest.TestCase):
     def test_recorded_probe_integrity_not_semantic_quality(self):
         records = [json.loads(line) for line in (ROOT / "evals/session-probe.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -172,6 +213,9 @@ class EvaluationFixtureTests(unittest.TestCase):
             self.assertEqual(canonical.read_bytes(), bundled.read_bytes())
             schema = json.loads(canonical.read_text(encoding="utf-8"))
             self.assertEqual(schema["properties"]["contract_version"]["const"], version)
+
+    def test_tuning_surface_does_not_quote_a_held_out_prompt(self):
+        self.assertEqual(held_out_prompt_leaks(), [])
 
 
 if __name__ == "__main__":
