@@ -52,6 +52,14 @@ class EvaluationFixtureTests(unittest.TestCase):
                     self.assertTrue(dimension["evidence"].strip())
         self.assertEqual(dict(Counter(row["preference"] for row in scored if not row["repeat"])),
                          results["preferences"]["primary"])
+        # Every declared tally must be recomputable from the records, using the
+        # declared split rather than a field the result file asserts about itself.
+        held_out = {case for case, declared in cases.items() if declared["split"] == "held_out"}
+        self.assertEqual(dict(Counter(row["preference"] for row in scored
+                                      if not row["repeat"] and row["case_id"] in held_out)),
+                         results["preferences"]["held_out"])
+        self.assertEqual(dict(Counter(row["preference"] for row in scored if row["repeat"])),
+                         results["preferences"]["repeats"])
 
     @classmethod
     def setUpClass(cls):
