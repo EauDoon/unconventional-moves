@@ -174,6 +174,32 @@ def check_suite(cases: list[dict]) -> list[str]:
     missing_tags = DECLARED_COVERAGE_TAGS - covered_tags
     if missing_tags:
         problems.append(f"missing declared tag coverage: {sorted(missing_tags)}")
+    problems.extend(check_declared_suite(cases))
+    return problems
+
+
+def check_declared_suite(cases: list[dict]) -> list[str]:
+    """Bind the inspected fixtures to the suite that results.json was scored from.
+
+    The per-case files and evals/cases.json hold the same twenty cases. The
+    recorded session probe was generated from the declared suite, so a fixture
+    that has drifted away from it is not the case that produced the scores.
+    """
+    try:
+        declared = json.loads(SUITE_SOURCE.read_text(encoding="utf-8"))["cases"]
+        expected = {case["id"]: case for case in declared}
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        return [f"declared suite cannot be read: {exc}"]
+    inspected = {case["id"]: case for case in cases}
+    problems = [
+        f"case file and declared suite disagree on {case_id!r}"
+        for case_id in sorted(set(inspected) ^ set(expected))
+    ]
+    problems.extend(
+        f"case file {case_id!r} does not match its declared suite entry"
+        for case_id in sorted(set(inspected) & set(expected))
+        if inspected[case_id] != expected[case_id]
+    )
     return problems
 
 
