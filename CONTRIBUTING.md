@@ -35,8 +35,9 @@ and evidence boundaries.
 2. Freeze a rubric before tuning behavioral instructions. Keep held-out cases
    separate from tuning. Structural tests do not establish semantic improvement.
 3. Add regression coverage for confirmed defects, then implement the fix.
-4. Run `python scripts/validate.py`, both example plan validators, and
-   `python -m unittest discover -s tests -v`. Use a verified Python interpreter.
+4. Run `python scripts/validate.py`, both example plan validators,
+   `python -m unittest discover -s tests -v`, and `python evals/runner.py`.
+   Use a verified Python interpreter.
 5. Build twice in fresh directories, compare checksums in the same environment,
    and exercise the extracted package away from the checkout.
 6. Review the diff, trust claims, compatibility, links, privacy, punctuation, and
