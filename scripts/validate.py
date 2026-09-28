@@ -227,7 +227,11 @@ class Checker:
                         f"link target is valid: {path.relative_to(self.root)} -> {target}",
                     )
                     continue
-                if parsed.scheme.lower() in EXTERNAL_SCHEMES or parsed.netloc:
+                scheme = parsed.scheme.lower()
+                # http(s) and mailto are external. A protocol-relative URL has
+                # a host and no scheme. A file URL with a host is still a local
+                # path and must not skip the inside-repo check.
+                if scheme in EXTERNAL_SCHEMES or (not scheme and parsed.netloc):
                     continue
                 if not parsed.path:
                     continue

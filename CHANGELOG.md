@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Check `file://` links that include a host against the repository boundary. A host no longer makes that URL look external.
 - Reject duplicate keys in eval case files and the declared suite instead of silently keeping the last value.
 - Remove a partially written report when output creation fails, so a retry is not blocked by the incomplete file.
 - Ship the eval runner and its per-case fixtures in the package so the documented fixture check can run from an extracted archive.
