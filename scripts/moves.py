@@ -17,9 +17,9 @@ from datetime import date
 from urllib.parse import urlsplit
 
 try:
-    from .validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
+    from .validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
 except ImportError:
-    from validate_plan import MAX_PLAN_BYTES, read_json_file, validate_plan_data
+    from validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -201,7 +201,7 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
     for field in ("stop_triggered", "consent_confirmed"):
         if type(outcome[field]) is not bool:
             raise ValueError(f"outcome {field} must be boolean")
-    if not isinstance(outcome["notes"], str) or not outcome["notes"].strip():
+    if not isinstance(outcome["notes"], str) or not has_visible_text(outcome["notes"]):
         raise ValueError("outcome notes must describe the observation and limitations")
     if Decimal(str(outcome["active_minutes"])) > Decimal(str(outcome["elapsed_hours"])) * 60:
         raise ValueError("outcome active minutes cannot exceed elapsed time")
@@ -641,7 +641,7 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     selected_move(plan)
     if move_id not in {move["id"] for move in plan["moves"]}:
         raise ValueError("move ID must identify an existing move")
-    if not reason.strip() or not first_step.strip():
+    if not has_visible_text(reason) or not has_visible_text(first_step):
         raise ValueError("selection reason and first step must be non-empty")
     revised = json.loads(json.dumps(plan))
     revised["selected_move_id"] = move_id

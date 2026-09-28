@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject required plan, outcome, and selection text that contains only whitespace or invisible format characters.
 - Reject source URLs that contain control or format characters, including C1 controls, zero-width spaces, and bidi overrides.
 - Check `file://` links that include a host against the repository boundary. A host no longer makes that URL look external.
 - Reject duplicate keys in eval case files and the declared suite instead of silently keeping the last value.
