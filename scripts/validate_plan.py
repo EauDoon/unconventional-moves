@@ -38,6 +38,16 @@ TOP_LEVEL_FIELDS = {"contract_version", "goal", "high_stakes", "moves", "priorit
 SOURCE_FIELDS = {"title", "publisher", "date", "url", "supports"}
 
 
+def has_visible_text(value: str) -> bool:
+    """True when the string has a character other than whitespace or a format mark.
+
+    str.strip only removes whitespace. A required field of zero-width spaces,
+    a BOM, or a word joiner is blank to a reader and is not a value.
+    A format character inside a real word, such as a joiner in a name, remains.
+    """
+    return any(not character.isspace() and unicodedata.category(character) != "Cf" for character in value)
+
+
 def contains_unsafe_action(text: str, pattern=UNSAFE) -> bool:
     """Conservative lexical screen, not a judgment of intent or safety.
 
@@ -136,7 +146,7 @@ def validate_experiment(value: object, label: str) -> list[str]:
     if set(value) != EXPERIMENT_FIELDS:
         failures.append(f"{label} experiment must contain exactly the documented fields")
     for field in ("hypothesis", "metric", "rollback"):
-        if not isinstance(value.get(field), str) or not value[field].strip():
+        if not isinstance(value.get(field), str) or not has_visible_text(value[field]):
             failures.append(f"{label} experiment {field} must be non-empty text")
     for field in ("baseline", "target"):
         number = value.get(field)
@@ -169,7 +179,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         failures.append(f"plan has unknown fields: {', '.join(unknown_top)}")
     if data.get("contract_version") not in ("unconventional-moves/v0.1", "unconventional-moves/v0.2"):
         failures.append("contract_version must be unconventional-moves/v0.1 or unconventional-moves/v0.2")
-    if not isinstance(data.get("goal"), str) or not data["goal"].strip():
+    if not isinstance(data.get("goal"), str) or not has_visible_text(data["goal"]):
         failures.append("goal must be a non-empty string")
     moves = data.get("moves")
     if not isinstance(moves, list) or not 5 <= len(moves) <= 7:
@@ -183,7 +193,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         unknown_move = sorted(set(move) - (set(MOVE_FIELDS) | ({"experiment"} if v2 else set())))
         if unknown_move:
             failures.append(f"move {index} has unknown fields: {', '.join(unknown_move)}")
-        missing = [field for field in MOVE_FIELDS if not isinstance(move.get(field), str) or not move[field].strip()]
+        missing = [field for field in MOVE_FIELDS if not isinstance(move.get(field), str) or not has_visible_text(move[field])]
         if missing:
             failures.append(f"move {index} missing non-empty fields: {', '.join(missing)}")
         if v2:
@@ -202,7 +212,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         failures.append("selected_move_id must identify exactly one existing move")
 
     prioritized = data.get("prioritized_action")
-    if not isinstance(prioritized, str) or not prioritized.strip():
+    if not isinstance(prioritized, str) or not has_visible_text(prioritized):
         failures.append("prioritized_action must be one non-empty string")
     elif contains_unsafe_action(prioritized):
         failures.append("prioritized_action contains an unsafe action")
@@ -218,7 +228,7 @@ def validate_plan_data(data: object, raw: str = "") -> list[str]:
         if unknown_source:
             failures.append(f"source {index} has unknown fields: {', '.join(unknown_source)}")
         for field in ("title", "url", "supports"):
-            if not isinstance(source.get(field), str) or not source[field].strip():
+            if not isinstance(source.get(field), str) or not has_visible_text(source[field]):
                 failures.append(f"source {index} missing non-empty {field}")
         for field in ("publisher", "date"):
             if field in source and not isinstance(source[field], str):

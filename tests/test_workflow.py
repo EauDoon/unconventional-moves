@@ -63,6 +63,43 @@ class ExperimentContractTests(unittest.TestCase):
         plan["contract_version"] = "unconventional-moves/v0.1"
         self.assertTrue(validate_plan_data(plan))
 
+    def test_invisible_characters_do_not_satisfy_required_text(self):
+        from moves import evaluate_outcome, select_plan
+        invisible = "\u200b\ufeff\u2060"
+        plan = example()
+        plan["goal"] = invisible
+        self.assertIn("goal must be a non-empty string", validate_plan_data(plan))
+        plan = example()
+        plan["goal"] = " "
+        self.assertIn("goal must be a non-empty string", validate_plan_data(plan))
+        plan = example()
+        plan["goal"] = "Practice\u200c blocks"
+        self.assertNotIn("goal must be a non-empty string", validate_plan_data(plan))
+        plan = example()
+        plan["prioritized_action"] = invisible
+        self.assertIn("prioritized_action must be one non-empty string", validate_plan_data(plan))
+        plan = example()
+        plan["moves"][0]["concrete_move"] = "\u200b"
+        self.assertTrue(any("concrete_move" in failure for failure in validate_plan_data(plan)))
+        plan = example()
+        plan["sources"] = [{"title": "\ufeff", "url": "https://example.test/source", "supports": "A declared boundary."}]
+        self.assertTrue(any("title" in failure for failure in validate_plan_data(plan)))
+        plan["sources"][0]["title"] = "Synthetic source"
+        plan["sources"][0]["supports"] = "\ufeff"
+        self.assertTrue(any("supports" in failure for failure in validate_plan_data(plan)))
+        plan = bounded_example()
+        plan["moves"][0]["experiment"]["hypothesis"] = "\u200b"
+        self.assertTrue(any("hypothesis" in failure for failure in validate_plan_data(plan)))
+        plan = bounded_example()
+        outcome = OutcomeTests().observation(plan)
+        outcome["notes"] = invisible
+        with self.assertRaisesRegex(ValueError, "notes"):
+            evaluate_outcome(plan, outcome)
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            select_plan(plan, "move-02", invisible, "Review the private setup")
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            select_plan(plan, "move-02", "Fits the available window", "\u200b")
+
 
 class AuthoringTests(unittest.TestCase):
     def test_unencodable_output_does_not_create_an_empty_artifact(self):
