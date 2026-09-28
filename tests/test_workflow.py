@@ -465,6 +465,21 @@ class SelectionTests(unittest.TestCase):
         self.assertIsNone(evaluate_outcome(plan, observation)["measurement"]["progress_fraction"])
         observation["observed_value"] = 10**1000
         self.assertNotIn("Infinity", json.dumps(evaluate_outcome(plan, observation), allow_nan=False))
+        from decimal import Decimal, localcontext
+        from moves import plan_digest
+        plan["moves"][0]["experiment"].update(baseline=10**1000, target=1, direction="decrease")
+        observation = OutcomeTests().observation(plan)
+        observation["observed_value"] = 10**500
+        observation["plan_sha256"] = plan_digest(plan)
+        review = evaluate_outcome(plan, observation)
+        self.assertIs(review["target_met"], False)
+        measurement = review["measurement"]
+        with localcontext() as context:
+            context.prec = 2000
+            expected_change = Decimal(10**500) - Decimal(10**1000)
+        self.assertEqual(Decimal(measurement["change_from_baseline"]), expected_change)
+        self.assertLess(Decimal(measurement["progress_fraction"]), Decimal(1))
+        self.assertNotIn("Infinity", json.dumps(review, allow_nan=False))
 
     def test_observation_draft_requires_completion_and_matches_selection(self):
         from moves import observation_draft, evaluate_outcome, select_plan
