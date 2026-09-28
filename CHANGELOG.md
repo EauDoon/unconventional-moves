@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject NaN, Infinity, and non-finite numbers in eval fixtures instead of accepting Python's non-JSON constants.
 - Report a non-object eval fixture as a case failure instead of crashing while formatting the error.
 - Reject duplicate keys in repository JSON checked by the validator, instead of keeping the last value.
 - Group declared publisher names that differ only by format characters such as a zero-width space, so repeated support is not hidden.
