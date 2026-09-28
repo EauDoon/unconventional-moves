@@ -196,11 +196,19 @@ class Checker:
         return path.read_text(encoding="utf-8") if path.is_file() else ""
 
     def json_file(self, relative: str) -> object:
+        def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            result: dict[str, object] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("JSON object contains a duplicate key")
+                result[key] = value
+            return result
+
         try:
-            value = json.loads(self.read(relative))
+            value = json.loads(self.read(relative), object_pairs_hook=unique_object)
             self.checks.append(f"valid JSON: {relative}")
             return value
-        except (json.JSONDecodeError, OSError) as exc:
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
             self.failures.append(f"invalid JSON {relative}: {exc}")
             return None
 
