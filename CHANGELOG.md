@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Remove a partially written report when output creation fails, so a retry is not blocked by the incomplete file.
 - Ship the eval runner and its per-case fixtures in the package so the documented fixture check can run from an extracted archive.
 - Group repeated source citations that differ only by a default port, an empty port, or IPv6 host case.
 - Recognize the plural evidence labels `facts` and `sources` in review, matching the worksheet vocabulary and the other label stems.

@@ -35,11 +35,22 @@ def read_plan(path: Path) -> dict:
 def emit(content: str, output: Path | None) -> None:
     if output is None:
         print(content, end="" if content.endswith("\n") else "\n")
-    else:
-        # Exclusive creation protects existing drafts, symlinks, and input files.
-        encoded = content.encode("utf-8")
-        with output.open("xb") as handle:
-            handle.write(encoded)
+        return
+    # Exclusive creation protects existing drafts, symlinks, and input files.
+    # A failed write must not leave a partial file that later blocks a retry.
+    encoded = content.encode("utf-8")
+    handle = output.open("xb")
+    written = False
+    try:
+        handle.write(encoded)
+        written = True
+    finally:
+        handle.close()
+        if not written:
+            try:
+                output.unlink()
+            except OSError:
+                pass
 
 
 def review_plan(plan: dict) -> dict:

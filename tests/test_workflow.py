@@ -73,6 +73,30 @@ class AuthoringTests(unittest.TestCase):
                 emit("Invalid Unicode: \ud800", path)
             self.assertFalse(path.exists())
 
+    def test_failed_write_does_not_leave_a_partial_artifact(self):
+        from unittest.mock import patch
+        from moves import emit
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "review.md"
+            real_open = Path.open
+
+            def failing_open(target, mode="r", *args, **kwargs):
+                handle = real_open(target, mode, *args, **kwargs)
+                if target == path:
+                    original = handle.write
+
+                    def boom(data):
+                        original(data[:1] if data else data)
+                        raise OSError("synthetic disk failure")
+
+                    handle.write = boom
+                return handle
+
+            with patch.object(Path, "open", failing_open):
+                with self.assertRaises(OSError):
+                    emit("complete report\n", path)
+            self.assertFalse(path.exists())
+
     def test_init_is_complete_and_does_not_overwrite(self):
         from moves import main
         with tempfile.TemporaryDirectory() as td:
