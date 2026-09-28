@@ -56,7 +56,7 @@ def review_plan(plan: dict) -> dict:
             else:
                 seen[normalized] = move["id"]
     for move in plan["moves"]:
-        if not re.search(r"(?i)\b(fact|source|prompt|inferen\w*|speculat\w*|hypothes\w*|assum\w*)\b", move["evidence_status"]):
+        if not re.search(r"(?i)\b(facts?|sources?|prompt|inferen\w*|speculat\w*|hypothes\w*|assum\w*)\b", move["evidence_status"]):
             findings.append({"code": "evidence_label_unclear", "move_id": move["id"],
                              "message": "Separate supported facts from inference and speculation."})
     if plan["high_stakes"]:
