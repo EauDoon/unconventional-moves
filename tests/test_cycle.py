@@ -200,6 +200,16 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertTrue(result["human_verification_required"])
         self.assertEqual(len(result["sources"]), 4)
 
+    def test_publishers_that_differ_by_format_characters_are_grouped(self):
+        names = ("Example Publisher", "Example\u200b Publisher", "ExamplePublisher", "Example\u200bPublisher", "Other House")
+        self.plan["sources"] = [{"title": "Synthetic language source", "url": f"https://example.org/source-{index}",
+                                  "publisher": name, "supports": "Practice hypothesis"}
+                                 for index, name in enumerate(names, 1)]
+        result = moves.audit_sources(self.plan, "2026-09-11", 30)
+        self.assertEqual(result["shared_declared_publisher_groups"], [[1, 2], [3, 4]])
+        self.assertTrue(result["independence_review_required"])
+        self.assertEqual(result["repeated_url_groups"], [])
+
     def test_repeated_urls_ignore_default_and_empty_ports(self):
         urls = [
             "https://example.org/Study#one",

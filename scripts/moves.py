@@ -11,6 +11,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from decimal import Decimal, localcontext
 from datetime import date
@@ -479,7 +480,10 @@ def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
     for index, source in enumerate(plan["sources"], 1):
         url_key = _citation_url_key(source["url"])
         urls.setdefault(url_key, []).append(index)
-        publisher_key = " ".join(source.get("publisher", "").casefold().split())
+        visible_publisher = "".join(
+            character for character in source.get("publisher", "") if unicodedata.category(character) != "Cf"
+        )
+        publisher_key = " ".join(visible_publisher.casefold().split())
         if publisher_key:
             publishers.setdefault(publisher_key, []).append(index)
         declared = source.get("date", "")
