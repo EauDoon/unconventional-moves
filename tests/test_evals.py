@@ -1,9 +1,14 @@
 """Fixture integrity only. These checks do not measure model behavior."""
 
+import importlib.util
+import io
 import json
 import hashlib
 import re
+import shutil
+import tempfile
 from collections import Counter
+from contextlib import redirect_stdout
 from pathlib import Path
 import unittest
 
@@ -216,6 +221,19 @@ class EvaluationFixtureTests(unittest.TestCase):
 
     def test_tuning_surface_does_not_quote_a_held_out_prompt(self):
         self.assertEqual(held_out_prompt_leaks(), [])
+
+    def test_suite_shape_errors_use_exit_code_2(self):
+        spec = importlib.util.spec_from_file_location("eval_runner_exit", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as td:
+            cases = Path(td) / "cases"
+            shutil.copytree(ROOT / "evals" / "cases", cases)
+            next(cases.glob("heldout-*.json")).unlink()
+            runner.CASES_DIR = cases
+            with redirect_stdout(io.StringIO()):
+                code = runner.main()
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":
