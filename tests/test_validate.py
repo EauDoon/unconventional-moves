@@ -333,6 +333,25 @@ class ValidateTests(unittest.TestCase):
                 2,
             )
 
+    def test_file_url_with_host_cannot_leave_the_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text(
+                "[outside](file://localhost/etc/passwd)\n",
+                encoding="utf-8",
+            )
+
+            checker = Checker(root)
+            checker.check_links()
+
+            self.assertTrue(
+                any(
+                    item.startswith("link stays inside repo:") and "file://localhost/etc/passwd" in item
+                    for item in checker.failures
+                ),
+                checker.failures,
+            )
+
     def test_encoded_null_in_link_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
