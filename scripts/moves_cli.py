@@ -20,14 +20,15 @@ Rules:
 """
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 try:
     from . import moves
+    from .validate_plan import read_json_file
 except ImportError:
     import moves
+    from validate_plan import read_json_file
 
 
 SUPPORTED_VERSIONS = {"unconventional-moves/v0.1", "unconventional-moves/v0.2"}
@@ -55,10 +56,15 @@ NO_PLAN_COMMANDS = frozenset({"init", "verify-handoff", "unpack-handoff"})
 
 
 def detect_version(plan_path: Path) -> str | None:
-    """Return the contract_version from a plan file, or None on parse error."""
+    """Return the contract_version from a plan file, or None on parse error.
+
+    Use the same bounded reader as moves.py. A separate json.loads call
+    accepts non-finite numbers, duplicate keys, and nesting deep enough
+    to raise RecursionError before the command's own parser can refuse it.
+    """
     try:
-        data = json.loads(plan_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        data = read_json_file(plan_path)
+    except (OSError, UnicodeError, ValueError):
         return None
     if not isinstance(data, dict):
         return None

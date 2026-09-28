@@ -616,3 +616,17 @@ class VersionGateTests(unittest.TestCase):
             result = self.run_shim("render", str(plan))
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("unsupported contract_version", result.stderr)
+
+    def test_gate_uses_the_bounded_parser_and_does_not_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            plan = Path(td) / "plan.json"
+            plan.write_text("[" * 10000 + "]" * 10000, encoding="utf-8")
+            result = self.run_shim("render", str(plan))
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertIn("FAIL", result.stderr)
+            plan.write_text('{"contract_version": "unconventional-moves/v0.1", "goal": NaN}\n', encoding="utf-8")
+            result = self.run_shim("render", str(plan))
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertIn("non-standard JSON constant", result.stderr)
