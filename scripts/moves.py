@@ -284,10 +284,12 @@ def compare_plans(before: dict, after: dict) -> dict:
     for move in changed:
         for item in move["changes"]:
             field = item["field"]
-            if field.startswith("experiment.") or field in {"mechanism", "concrete_move", "why_overlooked", "test_48h",
+            if field == "experiment" or field.startswith("experiment.") or field in {"mechanism", "concrete_move", "why_overlooked", "test_48h",
                                                           "bounds", "stop_condition", "success_signal", "evidence_status"}:
                 reason = "experiment_or_review_condition_changed"
-                if field in {"experiment.max_minutes", "experiment.duration_hours", "experiment.start_within_hours"} and item["after"] > item["before"]:
+                before, after = item["before"], item["after"]
+                if (field in {"experiment.max_minutes", "experiment.duration_hours", "experiment.start_within_hours"}
+                        and type(before) is int and type(after) is int and after > before):
                     reason = "declared_time_bound_expanded"
                 triggers.append({"move_id": move["move_id"], "field": field, "reason": reason})
     for move_id in sorted(old.keys() ^ new.keys()):
