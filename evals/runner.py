@@ -238,6 +238,9 @@ def main() -> int:
     if not CASES_DIR.is_dir():
         print(f"cases directory missing: {CASES_DIR}", file=sys.stderr)
         return 2
+    if not RUBRIC_PATH.is_file():
+        print(f"rubric missing: {RUBRIC_PATH}", file=sys.stderr)
+        return 2
     rubric_text = RUBRIC_PATH.read_text(encoding="utf-8")
     case_paths = sorted(CASES_DIR.glob("*.json"))
     cases: list[dict] = []
