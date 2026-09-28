@@ -231,8 +231,10 @@ def main() -> int:
     print(f"suite: {len(cases)} case files inspected")
     for problem in suite_problems:
         print(f"suite FAIL  {problem}")
-    if failures or suite_problems:
+    if failures:
         return 1
+    if suite_problems:
+        return 2
     return 0
 
 
