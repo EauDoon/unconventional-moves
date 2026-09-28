@@ -95,6 +95,23 @@ def fail(reason: str) -> None:
     raise ValueError(reason)
 
 
+def load_fixture_json(text: str) -> object:
+    """Load fixture JSON and reject duplicate keys instead of keeping the last one."""
+
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("JSON object contains a duplicate key")
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(text, object_pairs_hook=unique_object)
+    except RecursionError as exc:
+        raise ValueError("JSON nesting is too deep") from exc
+
+
 def check_case(case: dict, rubric_text: str) -> None:
     missing = REQUIRED_FIELDS - set(case)
     if missing:
@@ -186,9 +203,9 @@ def check_declared_suite(cases: list[dict]) -> list[str]:
     that has drifted away from it is not the case that produced the scores.
     """
     try:
-        declared = json.loads(SUITE_SOURCE.read_text(encoding="utf-8"))["cases"]
+        declared = load_fixture_json(SUITE_SOURCE.read_text(encoding="utf-8"))["cases"]
         expected = {case["id"]: case for case in declared}
-    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (OSError, json.JSONDecodeError, ValueError, KeyError, TypeError) as exc:
         return [f"declared suite cannot be read: {exc}"]
     inspected = {case["id"]: case for case in cases}
     problems = [
@@ -213,9 +230,13 @@ def main() -> int:
     failures = 0
     for path in case_paths:
         try:
-            case = json.loads(path.read_text(encoding="utf-8"))
+            case = load_fixture_json(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             print(f"FAIL  {path.stem}  invalid JSON: {exc}")
+            failures += 1
+            continue
+        except ValueError as exc:
+            print(f"FAIL  {path.stem}  {exc}")
             failures += 1
             continue
         try:

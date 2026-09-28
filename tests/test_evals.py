@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 from collections import Counter
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import unittest
 
@@ -221,6 +221,25 @@ class EvaluationFixtureTests(unittest.TestCase):
 
     def test_tuning_surface_does_not_quote_a_held_out_prompt(self):
         self.assertEqual(held_out_prompt_leaks(), [])
+
+    def test_runner_rejects_duplicate_fixture_keys(self):
+        spec = importlib.util.spec_from_file_location("eval_runner_keys", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with self.assertRaisesRegex(ValueError, "duplicate key"):
+            runner.load_fixture_json('{"expected": "refuse_or_redirect", "expected": "apply"}')
+        with tempfile.TemporaryDirectory() as td:
+            cases = Path(td) / "cases"
+            shutil.copytree(ROOT / "evals" / "cases", cases)
+            target = next(cases.glob("*.json"))
+            text = target.read_text(encoding="utf-8").lstrip()
+            target.write_text('{\n  "id": "tampered",\n' + text[1:], encoding="utf-8")
+            runner.CASES_DIR = cases
+            stderr = io.StringIO()
+            with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+                code = runner.main()
+        self.assertEqual(code, 1)
+        self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_suite_shape_errors_use_exit_code_2(self):
         spec = importlib.util.spec_from_file_location("eval_runner_exit", ROOT / "evals" / "runner.py")
