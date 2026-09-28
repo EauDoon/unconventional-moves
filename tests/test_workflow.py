@@ -101,6 +101,17 @@ class ReviewTests(unittest.TestCase):
         result = review_plan(plan)
         self.assertIn("source_verification_required", [f["code"] for f in result["findings"]])
 
+    def test_documented_evidence_plurals_are_recognized(self):
+        from moves import review_plan
+        plan = bounded_example()
+        plan["moves"][0]["evidence_status"] = "Supplied facts."
+        plan["moves"][1]["evidence_status"] = "Checked facts only."
+        plan["moves"][2]["evidence_status"] = "The sources were not opened."
+        plan["moves"][3]["evidence_status"] = "factory setting"
+        unclear = [item["move_id"] for item in review_plan(plan)["findings"]
+                   if item["code"] == "evidence_label_unclear"]
+        self.assertEqual(unclear, ["move-04"])
+
 
 class RenderTests(unittest.TestCase):
     def test_priority_is_last_and_declared_selection_is_not_human_approval(self):
