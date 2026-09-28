@@ -333,6 +333,22 @@ class ValidateTests(unittest.TestCase):
                 2,
             )
 
+    def test_encoded_null_in_link_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text(
+                "[outside](%00../outside.md)\n",
+                encoding="utf-8",
+            )
+
+            checker = Checker(root)
+            checker.check_links()
+
+            self.assertTrue(
+                any("link target is valid:" in item for item in checker.failures),
+                checker.failures,
+            )
+
     def test_multiline_reference_definition_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

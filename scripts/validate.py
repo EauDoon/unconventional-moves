@@ -240,7 +240,14 @@ class Checker:
                     )
                     continue
                 portable_relative = relative.replace("\\", "/")
-                candidate = (path.parent / portable_relative).resolve()
+                try:
+                    candidate = (path.parent / portable_relative).resolve()
+                except (OSError, ValueError):
+                    self.ok(
+                        False,
+                        f"link target is valid: {path.relative_to(self.root)} -> {target}",
+                    )
+                    continue
                 inside_repo = candidate == root_resolved or root_resolved in candidate.parents
                 self.ok(
                     inside_repo,

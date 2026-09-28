@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fail the repository link check when a destination contains an encoded null, instead of crashing with ValueError.
 - Apply the version gate to the first positional plan path, so flags placed before the plan still refuse a v0.1 plan on v0.2-only commands.
 - Parse plan files at the version gate with the same bounded reader as the CLI, so deep nesting and non-finite numbers fail cleanly instead of raising RecursionError.
 - Refuse a version 0.1 plan at the version gate for every command that reads the selected move, instead of failing later with a generic workflow message.
