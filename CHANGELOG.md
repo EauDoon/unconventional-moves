@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Compute progress and change from baseline with enough decimal precision to represent the parsed numbers, so a huge gap cannot round to a fraction of 1.
 - Reject plural forms of the screened actions, including laws, consents, scopes, and safeties, without flagging consenting participants or stealth.
 - Reject required plan, outcome, and selection text that contains only whitespace or invisible format characters.
 - Reject source URLs that contain control or format characters, including C1 controls, zero-width spaces, and bidi overrides.

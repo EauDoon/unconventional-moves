@@ -227,14 +227,31 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
 
 
+def _decimal_precision(numbers: list[Decimal]) -> int:
+    """Enough significant digits to keep the parsed values exact.
+
+    A fixed precision of 28 makes 10**500 - 10**1000 identical to 0 - 10**1000,
+    so the progress fraction becomes 1 while the exact target comparison says
+    the target was not met.
+    """
+    precision = 28
+    for number in numbers:
+        _sign, digits, exponent = number.as_tuple()
+        if not isinstance(exponent, int):
+            continue
+        span = len(digits) + (exponent if exponent >= 0 else -exponent)
+        precision = max(precision, span)
+    return precision
+
+
 def measurement_context(experiment: dict, observed: int | float | None) -> dict:
     result = {key: experiment[key] for key in ("metric", "baseline", "target", "direction")}
     result.update(observed_value=observed, change_from_baseline=None, progress_fraction=None)
     if observed is not None:
+        baseline, target, value = (Decimal(str(number)) for number in
+                                   (experiment["baseline"], experiment["target"], observed))
         with localcontext() as context:
-            context.prec = 28
-            baseline, target, value = (Decimal(str(number)) for number in
-                                       (experiment["baseline"], experiment["target"], observed))
+            context.prec = _decimal_precision([baseline, target, value])
             result["change_from_baseline"] = str(value - baseline)
             result["progress_fraction"] = str((value - baseline) / (target - baseline))
     return result
