@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reject duplicate keys in repository JSON checked by the validator, instead of keeping the last value.
 - Group declared publisher names that differ only by format characters such as a zero-width space, so repeated support is not hidden.
 - Flag an added or removed experiment object in revision review triggers, matching the other measurement changes.
 - Compute progress and change from baseline with enough decimal precision to represent the parsed numbers, so a huge gap cannot round to a fraction of 1.

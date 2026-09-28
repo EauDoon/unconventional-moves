@@ -145,6 +145,19 @@ class ValidateTests(unittest.TestCase):
                 candidate = {**plan, "sources": [{**source, "url": url}]}
                 self.assertIn("source 1 URL must use http or https", validate_plan_data(candidate))
 
+    def test_repository_json_rejects_duplicate_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "schemas").mkdir()
+            (root / "schemas" / "moves.schema.json").write_text(
+                '{"required": ["moves"], "required": ["moves", "prioritized_action", "sources"]}\n',
+                encoding="utf-8",
+            )
+            checker = Checker(root)
+            self.assertIsNone(checker.json_file("schemas/moves.schema.json"))
+            self.assertTrue(any("duplicate key" in failure for failure in checker.failures), checker.failures)
+            self.assertTrue(all("prioritized_action" not in failure for failure in checker.failures))
+
     def test_link_outside_repository_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
