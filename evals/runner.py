@@ -21,6 +21,7 @@ or cases requires editing the source files and re-running this script.
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -106,10 +107,23 @@ def load_fixture_json(text: str) -> object:
             result[key] = value
         return result
 
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"non-standard JSON constant: {value}")
+
     try:
-        return json.loads(text, object_pairs_hook=unique_object)
+        data = json.loads(text, object_pairs_hook=unique_object, parse_constant=reject_constant)
     except RecursionError as exc:
         raise ValueError("JSON nesting is too deep") from exc
+    pending = [data]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("JSON numbers must be finite")
+        elif isinstance(value, dict):
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return data
 
 
 def check_case(case: dict, rubric_text: str) -> None:

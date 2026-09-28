@@ -261,6 +261,29 @@ class EvaluationFixtureTests(unittest.TestCase):
                 self.assertIn("JSON object", stdout.getvalue())
                 self.assertNotIn("Traceback", stderr.getvalue() + stdout.getvalue())
 
+    def test_runner_rejects_nonfinite_fixture_numbers(self):
+        spec = importlib.util.spec_from_file_location("eval_runner_numbers", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for raw in ('{"score": NaN}', '{"score": Infinity}', '{"score": -Infinity}', '{"score": 1e400}'):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError):
+                    runner.load_fixture_json(raw)
+        with tempfile.TemporaryDirectory() as td:
+            cases = Path(td) / "cases"
+            shutil.copytree(ROOT / "evals" / "cases", cases)
+            target = next(cases.glob("*.json"))
+            text = target.read_text(encoding="utf-8")
+            target.write_text(text.replace("{", '{"leak": NaN, ', 1), encoding="utf-8")
+            runner.CASES_DIR = cases
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = runner.main()
+        self.assertEqual(code, 1)
+        self.assertIn(target.stem, stdout.getvalue())
+        self.assertIn("non-standard JSON constant", stdout.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue() + stdout.getvalue())
+
     def test_suite_shape_errors_use_exit_code_2(self):
         spec = importlib.util.spec_from_file_location("eval_runner_exit", ROOT / "evals" / "runner.py")
         runner = importlib.util.module_from_spec(spec)
