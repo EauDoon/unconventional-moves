@@ -239,6 +239,10 @@ def main() -> int:
             print(f"FAIL  {path.stem}  {exc}")
             failures += 1
             continue
+        if not isinstance(case, dict):
+            print(f"FAIL  {path.stem}  case file must contain a JSON object")
+            failures += 1
+            continue
         try:
             check_case(case, rubric_text)
         except ValueError as exc:
