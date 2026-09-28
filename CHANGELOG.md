@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Group repeated source citations that differ only by a default port, an empty port, or IPv6 host case.
 - Recognize the plural evidence labels `facts` and `sources` in review, matching the worksheet vocabulary and the other label stems.
 - Return exit code 2 from the eval runner when the suite shape is wrong and no individual case failed, matching the runner contract.
 - Fail the repository link check when a destination contains an encoded null, instead of crashing with ValueError.

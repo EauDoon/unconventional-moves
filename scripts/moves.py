@@ -425,14 +425,29 @@ def iso_date(value: str) -> date:
     return date.fromisoformat(value)
 
 
+def _citation_url_key(value: str) -> str:
+    """Group citations that differ only by fragment, host case, or default port."""
+    parsed = urlsplit(value)
+    hostname = parsed.hostname
+    if not hostname:
+        return parsed._replace(fragment="").geturl()
+    host = hostname.lower()
+    port = parsed.port
+    scheme = parsed.scheme.lower()
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        port = None
+    bracketed = f"[{host}]" if ":" in host else host
+    netloc = bracketed if port is None else f"{bracketed}:{port}"
+    return parsed._replace(scheme=scheme, netloc=netloc, fragment="").geturl()
+
+
 def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
     reference = iso_date(as_of)
     if type(max_age_days) is not int or not 0 <= max_age_days <= 36500:
         raise ValueError("max age must be an integer from 0 to 36500 days")
     sources, urls, publishers = [], {}, {}
     for index, source in enumerate(plan["sources"], 1):
-        parsed = urlsplit(source["url"])
-        url_key = parsed._replace(netloc=parsed.netloc.lower(), fragment="").geturl()
+        url_key = _citation_url_key(source["url"])
         urls.setdefault(url_key, []).append(index)
         publisher_key = " ".join(source.get("publisher", "").casefold().split())
         if publisher_key:

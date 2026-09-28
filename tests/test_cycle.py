@@ -200,6 +200,23 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertTrue(result["human_verification_required"])
         self.assertEqual(len(result["sources"]), 4)
 
+    def test_repeated_urls_ignore_default_and_empty_ports(self):
+        urls = [
+            "https://example.org/Study#one",
+            "https://EXAMPLE.org:443/Study#two",
+            "https://example.org:/Study",
+            "https://example.org:8443/Study",
+            "http://example.org:80/other",
+            "http://example.org/other",
+            "https://[2001:DB8::1]/a#x",
+            "https://[2001:db8::1]:443/a",
+        ]
+        self.plan["sources"] = [{"title": "Synthetic language source", "url": url,
+                                  "supports": "Practice hypothesis"} for url in urls]
+        result = moves.audit_sources(self.plan, "2026-09-11", 30)
+        self.assertEqual(result["repeated_url_groups"], [[1, 2, 3], [5, 6], [7, 8]])
+        self.assertNotIn(4, [index for group in result["repeated_url_groups"] for index in group])
+
     def test_screen_respects_start_and_duration_without_reselection(self):
         self.plan["moves"][1]["experiment"].update(start_within_hours=0, duration_hours=1)
         result = moves.screen_moves(self.plan, 20, "self_only", 0, 1)
