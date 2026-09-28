@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Return exit code 2 when the eval rubric file is missing, instead of raising FileNotFoundError.
 - Reject NaN, Infinity, and non-finite numbers in eval fixtures instead of accepting Python's non-JSON constants.
 - Report a non-object eval fixture as a case failure instead of crashing while formatting the error.
 - Reject duplicate keys in repository JSON checked by the validator, instead of keeping the last value.

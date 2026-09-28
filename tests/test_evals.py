@@ -297,6 +297,18 @@ class EvaluationFixtureTests(unittest.TestCase):
                 code = runner.main()
         self.assertEqual(code, 2)
 
+    def test_missing_rubric_uses_exit_code_2(self):
+        spec = importlib.util.spec_from_file_location("eval_runner_rubric", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        runner.RUBRIC_PATH = ROOT / "evals" / "missing-rubric.md"
+        stderr = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+            code = runner.main()
+        self.assertEqual(code, 2)
+        self.assertIn("rubric", stderr.getvalue().lower())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
