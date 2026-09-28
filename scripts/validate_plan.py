@@ -26,11 +26,11 @@ MOVE_FIELDS = [
     "bounds",
 ]
 UNSAFE = re.compile(
-    r"(?i)\b(?:bypass(?:es|ed|ing)?\s+(?:(?:a|the)\s+)?safety|"
+    r"(?i)\b(?:bypass(?:es|ed|ing)?\s+(?:(?:a|the)\s+)?safet(?:y|ies)|"
     r"steal(?:s|ing)?|stole|stolen|harass\w*|"
-    r"disabl(?:e|es|ed|ing)\s+(?:the\s+)?safety|"
-    r"ignor(?:e|es|ed|ing)\s+(?:the\s+)?(?:consent|scope|safety)|exfiltrat\w*|"
-    r"evad(?:e|es|ed|ing)\s+(?:the\s+)?(?:law|consent))\b"
+    r"disabl(?:e|es|ed|ing)\s+(?:the\s+)?safet(?:y|ies)|"
+    r"ignor(?:e|es|ed|ing)\s+(?:the\s+)?(?:consents?|scopes?|safet(?:y|ies))|exfiltrat\w*|"
+    r"evad(?:e|es|ed|ing)\s+(?:the\s+)?(?:laws?|consents?))\b"
 )
 MAX_PLAN_BYTES = 1_000_000
 MAX_JSON_DEPTH = 64

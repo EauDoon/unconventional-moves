@@ -55,6 +55,27 @@ class ValidateTests(unittest.TestCase):
                     failures = validate_plan_data(candidate)
                     self.assertEqual(bool(failures), text in prohibited, failures)
 
+    def test_plural_prohibited_actions_stay_prohibited(self):
+        prohibited = (
+            "Begin evading the laws.",
+            "Start ignoring consents.",
+            "Try bypassing safeties.",
+            "Ignore scopes.",
+            "Start disabling safeties.",
+        )
+        allowed = (
+            "Do not evade laws.",
+            "Never ignore consents.",
+            "Run a stealth pilot with consent.",
+            "Work with consenting participants only.",
+        )
+        for text in prohibited:
+            with self.subTest(text=text):
+                self.assertTrue(contains_unsafe_action(text), text)
+        for text in allowed:
+            with self.subTest(text=text):
+                self.assertFalse(contains_unsafe_action(text), text)
+
     def test_decimal_direction_matches_outcome_arithmetic(self):
         plan = json.loads((ROOT / "examples/bounded-plan.json").read_text(encoding="utf-8"))
         experiment = plan["moves"][0]["experiment"]
