@@ -313,6 +313,24 @@ class ComparisonTests(unittest.TestCase):
                     self.assertEqual([item["field"] for item in result["review_triggers"]], [field])
                     self.assertEqual(result["review_triggers"][0]["move_id"], "move-01")
 
+    def test_adding_or_removing_the_experiment_object_requires_review(self):
+        from moves import compare_plans
+        full = bounded_example()
+        plain = copy.deepcopy(full)
+        for move in plain["moves"]:
+            move.pop("experiment")
+        plain.pop("selected_move_id")
+        plain["contract_version"] = "unconventional-moves/v0.1"
+        self.assertEqual(validate_plan_data(full), [])
+        self.assertEqual(validate_plan_data(plain), [])
+        for before, after in ((plain, full), (full, plain)):
+            with self.subTest(direction=after["contract_version"]):
+                result = compare_plans(before, after)
+                experiment_triggers = [item for item in result["review_triggers"] if item["field"] == "experiment"]
+                self.assertEqual(len(experiment_triggers), 5)
+                self.assertTrue(all(item["reason"] == "experiment_or_review_condition_changed" for item in experiment_triggers))
+                self.assertEqual({item["move_id"] for item in experiment_triggers}, {f"move-0{index}" for index in range(1, 6)})
+
     def test_reordering_and_bound_changes_have_distinct_diagnostics(self):
         from moves import compare_plans
         before = bounded_example()
