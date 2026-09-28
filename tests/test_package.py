@@ -20,6 +20,14 @@ OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_package_includes_the_eval_runner(self):
+        entries = json.loads((ROOT / "package-manifest.json").read_text(encoding="utf-8"))
+        self.assertIn("evals/runner.py", entries)
+        self.assertIn("evals/cases/unsafe-objective.json", entries)
+        packaged = files_for(ROOT)
+        self.assertIn(ROOT / "evals" / "runner.py", packaged)
+        self.assertEqual(sum(1 for path in packaged if path.parent.name == "cases"), 20)
+
     def test_extracted_package_replays_verified_handoff_recovery(self):
         import zipfile
         with tempfile.TemporaryDirectory() as td:
@@ -41,6 +49,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(summary["restored_checkpoints"], 3)
             self.assertTrue(summary["old_history_rejected_for_revision"])
             for args in (["scripts/validate.py"],
+                         ["evals/runner.py"],
                          ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
                           "--output-dir", str(root / "shim-restored")],
                          ["scripts/moves.py", "render", "examples/example-plan.json"]):
