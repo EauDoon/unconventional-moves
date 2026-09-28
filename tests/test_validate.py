@@ -97,6 +97,7 @@ class ValidateTests(unittest.TestCase):
             "https://example.test/source?id=1#claim",
             "http://localhost:8080/source",
             "https://[2001:db8::1]/source",
+            "https://example.test/h\u00e9llo",
         )
         invalid = (
             "https://",
@@ -106,6 +107,11 @@ class ValidateTests(unittest.TestCase):
             "https://example.test:invalid/source",
             "javascript:https://example.test/source",
             "https://example.test/source\nnext",
+            "https://example.test\x80/source",
+            "https://example.test\u200b/source",
+            "https://example.test\u202e.evil.test/source",
+            "https://example.test\ufeff/source",
+            "https://example.test\u180e/source",
         )
 
         for url in valid:
