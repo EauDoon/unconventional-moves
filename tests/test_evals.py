@@ -241,6 +241,26 @@ class EvaluationFixtureTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_runner_rejects_non_object_fixtures(self):
+        spec = importlib.util.spec_from_file_location("eval_runner_shape", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for payload in ("[]\n", "null\n"):
+            with self.subTest(payload=payload.strip()):
+                with tempfile.TemporaryDirectory() as td:
+                    cases = Path(td) / "cases"
+                    shutil.copytree(ROOT / "evals" / "cases", cases)
+                    target = next(cases.glob("*.json"))
+                    target.write_text(payload, encoding="utf-8")
+                    runner.CASES_DIR = cases
+                    stdout, stderr = io.StringIO(), io.StringIO()
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        code = runner.main()
+                self.assertEqual(code, 1)
+                self.assertIn(target.stem, stdout.getvalue())
+                self.assertIn("JSON object", stdout.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue() + stdout.getvalue())
+
     def test_suite_shape_errors_use_exit_code_2(self):
         spec = importlib.util.spec_from_file_location("eval_runner_exit", ROOT / "evals" / "runner.py")
         runner = importlib.util.module_from_spec(spec)
