@@ -11,9 +11,10 @@ The underlying moves.py stays untouched and remains the single source of
 for behavior. This shim only inspects the input file and applies a gate.
 
 Rules:
-- plan-required commands at argv[1]:
+- plan-required commands, using the first positional plan path:
   v0.2-only commands on a v0.1 plan are refused with exit 1.
   shared commands pass through to moves.main() unchanged.
+  Optional flags may precede the plan; every moves.py option takes a value.
 - plan-less commands (init, verify-handoff, unpack-handoff): pass through directly.
 - unknown contract_version: refused with exit 1.
 - no argv: delegated so argparse prints its usage.
@@ -72,6 +73,25 @@ def detect_version(plan_path: Path) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def plan_argument(argv: list[str]) -> str | None:
+    """Return the first positional argument.
+
+    argparse accepts options before the plan path. Every option in moves.py
+    takes one value, including the ``--name=value`` form. Treating argv[1]
+    as the plan skips the version gate whenever a flag comes first.
+    """
+    index = 1
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--":
+            return argv[index + 1] if index + 1 < len(argv) else None
+        if arg.startswith("-"):
+            index += 1 if "=" in arg else 2
+            continue
+        return arg
+    return None
+
+
 def gate_version(command: str, argv: list[str]) -> int | None:
     """Return a non-zero exit code to refuse, or None to pass through."""
     if not argv:
@@ -80,9 +100,10 @@ def gate_version(command: str, argv: list[str]) -> int | None:
         return None
     if command not in V02_REQUIRED_COMMANDS and command not in SHARED_COMMANDS:
         return None
-    if len(argv) < 2:
+    plan = plan_argument(argv)
+    if plan is None:
         return None
-    plan_path = Path(argv[1])
+    plan_path = Path(plan)
     if not plan_path.exists():
         return None
     version = detect_version(plan_path)

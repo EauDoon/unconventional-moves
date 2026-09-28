@@ -51,9 +51,9 @@ comparisons or unique move IDs. See
 
 ## CLI command gate (from scripts/moves_cli.py)
 
-The version-aware shim reads `contract_version` from the plan at `argv[1]`
-and refuses v0.2-only commands against a v0.1 plan with exit 1, before
-`moves.py` runs.
+The version-aware shim reads `contract_version` from the first positional
+plan path and refuses v0.2-only commands against a v0.1 plan with exit 1,
+before `moves.py` runs. Optional flags may precede that path.
 
 - v0.2-only commands: `card`, `debrief`, `handoff`, `limits`,
   `observation-draft`, `outcome`, `record`, `screen`, `select`, `table`,

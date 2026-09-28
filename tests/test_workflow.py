@@ -617,6 +617,24 @@ class VersionGateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("unsupported contract_version", result.stderr)
 
+    def test_flags_before_the_plan_still_hit_the_version_gate(self):
+        v01 = str(ROOT / "examples/example-plan.json")
+        cases = (
+            ("card", "--format", "json", v01),
+            ("card", "--format=json", v01),
+            ("screen", "--max-minutes", "20", "--exposure", "self_only", v01),
+            ("render", "--format", "html", v01),
+        )
+        for args in cases:
+            with self.subTest(args=args):
+                result = self.run_shim(*args)
+                if args[0] == "render":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("requires a v0.2 plan", result.stderr)
+                    self.assertNotIn("experiment workflow requires", result.stderr)
+
     def test_gate_uses_the_bounded_parser_and_does_not_traceback(self):
         with tempfile.TemporaryDirectory() as td:
             plan = Path(td) / "plan.json"
