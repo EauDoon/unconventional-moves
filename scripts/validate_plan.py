@@ -8,6 +8,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -57,7 +58,9 @@ def contains_unsafe_action(text: str, pattern=UNSAFE) -> bool:
 
 
 def _valid_source_url(value: str) -> bool:
-    if any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in value):
+    # Reject whitespace, C0/C1 controls, and format characters. A zero-width
+    # space or bidi override is not whitespace, but it can hide a different host.
+    if any(character.isspace() or unicodedata.category(character).startswith("C") for character in value):
         return False
     try:
         parsed = urlsplit(value)
