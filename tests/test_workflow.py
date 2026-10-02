@@ -16,6 +16,29 @@ def example():
 
 
 class InputTests(unittest.TestCase):
+    def test_text_diagnostics_escape_authored_fields_and_versions(self):
+        injected = 'invalid\nPASS valid plan\x1b[2J'
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'plan.json'
+            for document, commands in (
+                ({**example(), injected: True}, (
+                    ('scripts/validate_plan.py',), ('scripts/moves.py', 'review'),
+                    ('scripts/moves_cli.py', 'review'))),
+                ({**example(), 'contract_version': injected}, (
+                    ('scripts/moves_cli.py', 'review'),)),
+            ):
+                path.write_text(json.dumps(document), encoding='utf-8')
+                for command in commands:
+                    with self.subTest(command=command):
+                        result = subprocess.run([sys.executable, *command, str(path)],
+                                                cwd=ROOT, capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 1)
+                        diagnostic = result.stdout + result.stderr
+                        self.assertEqual(len(diagnostic.splitlines()), 1)
+                        self.assertTrue(diagnostic.startswith('FAIL '))
+                        self.assertNotIn('\x1b', diagnostic)
+                        self.assertIn(json.dumps(injected)[1:-1], diagnostic)
+
     def test_bounded_input_and_duplicate_keys(self):
         for raw in (" " * (MAX_PLAN_BYTES + 1), '{"a":1,"a":2}', '{"a":NaN}'):
             with self.assertRaises(ValueError):
@@ -113,26 +136,30 @@ class AuthoringTests(unittest.TestCase):
     def test_failed_write_does_not_leave_a_partial_artifact(self):
         from unittest.mock import patch
         from moves import emit
-        with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "review.md"
-            real_open = Path.open
+        for failure in ('write', 'close'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as td:
+                path = Path(td) / "review.md"
+                real_open = Path.open
 
-            def failing_open(target, mode="r", *args, **kwargs):
-                handle = real_open(target, mode, *args, **kwargs)
-                if target == path:
-                    original = handle.write
+                def failing_open(target, mode="r", *args, **kwargs):
+                    handle = real_open(target, mode, *args, **kwargs)
+                    if target == path:
+                        original = getattr(handle, failure)
 
-                    def boom(data):
-                        original(data[:1] if data else data)
-                        raise OSError("synthetic disk failure")
+                        def boom(*arguments):
+                            if failure == 'write':
+                                original(arguments[0][:1])
+                            else:
+                                original()
+                            raise OSError("synthetic disk failure")
 
-                    handle.write = boom
-                return handle
+                        setattr(handle, failure, boom)
+                    return handle
 
-            with patch.object(Path, "open", failing_open):
-                with self.assertRaises(OSError):
-                    emit("complete report\n", path)
-            self.assertFalse(path.exists())
+                with patch.object(Path, "open", failing_open):
+                    with self.assertRaises(OSError):
+                        emit("complete report\n", path)
+                self.assertFalse(path.exists())
 
     def test_init_is_complete_and_does_not_overwrite(self):
         from moves import main
