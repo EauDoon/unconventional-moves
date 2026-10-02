@@ -21,6 +21,7 @@ Rules:
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -110,7 +111,7 @@ def gate_version(command: str, argv: list[str]) -> int | None:
     if version is None:
         return None
     if version not in SUPPORTED_VERSIONS:
-        print("FAIL unsupported contract_version: " + version, file=sys.stderr)
+        print("FAIL unsupported contract_version: " + json.dumps(version, ensure_ascii=True)[1:-1], file=sys.stderr)
         return 1
     if command in V02_REQUIRED_COMMANDS and version == "unconventional-moves/v0.1":
         print(

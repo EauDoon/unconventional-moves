@@ -261,7 +261,7 @@ def main() -> int:
         return int(bool(failures))
     if failures:
         for failure in failures:
-            print(f"FAIL {failure}")
+            print("FAIL " + json.dumps(failure, ensure_ascii=True)[1:-1])
         return 1
     print(f"PASS valid plan: {args.plan}")
     return 0

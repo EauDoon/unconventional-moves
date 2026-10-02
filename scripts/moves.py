@@ -43,17 +43,15 @@ def emit(content: str, output: Path | None) -> None:
     # A failed write must not leave a partial file that later blocks a retry.
     encoded = content.encode("utf-8")
     handle = output.open("xb")
-    written = False
     try:
-        handle.write(encoded)
-        written = True
-    finally:
-        handle.close()
-        if not written:
-            try:
-                output.unlink()
-            except OSError:
-                pass
+        with handle:
+            handle.write(encoded)
+    except BaseException:
+        try:
+            output.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def review_plan(plan: dict) -> dict:
@@ -831,7 +829,7 @@ def main(argv: list[str] | None = None) -> int:
         print("FAIL invalid JSON", file=sys.stderr)
         return 1
     except ValueError as exc:
-        print("FAIL " + str(exc), file=sys.stderr)
+        print("FAIL " + json.dumps(str(exc), ensure_ascii=True)[1:-1], file=sys.stderr)
         return 1
     return 0
 
