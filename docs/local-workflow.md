@@ -2,6 +2,14 @@
 
 Use Python 3.11 or 3.12. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
 
+Successful `moves.py` and `moves_cli.py` output uses UTF-8 with LF newlines,
+including redirected stdout, independently of the process locale or
+`PYTHONIOENCODING`. Decode captured output as UTF-8. Explicit file exports also
+use UTF-8 and preserve Unicode. Rendering, validation, and review without an
+output argument do not create report files; use `python -B` to suppress Python's
+import caches as well. This encoding guarantee concerns successful
+report output; it does not authenticate the input or execute an experiment.
+
 ```sh
 python scripts/moves.py init --output draft.json
 python scripts/validate_plan.py draft.json --json

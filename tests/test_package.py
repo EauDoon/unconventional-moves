@@ -1,10 +1,14 @@
 import json
+import os
+import contextlib
+import io
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -13,6 +17,7 @@ from scripts.package import (
     MAX_VERSION_LENGTH,
     files_for,
     version_for,
+    main as package_main,
 )
 
 MAX_LENGTH_VERSION = f"1.{'9' * 60}.3"
@@ -20,6 +25,52 @@ OVERLONG_VERSION = f"1.{'9' * 61}.3"
 
 
 class PackageTests(unittest.TestCase):
+    def test_unicode_output_path_reports_success_with_ascii_process_encoding(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'caf\u00e9-\u6771\u4eac'
+            result = subprocess.run(
+                [sys.executable, str(ROOT / 'scripts/package.py'), '--output', str(output)],
+                env={**os.environ, 'PYTHONIOENCODING': 'ascii'}, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            archive = next(output.glob('*.zip'))
+            self.assertIn(str(archive.resolve()), result.stdout.decode('utf-8'))
+            self.assertEqual(archive.with_suffix('.zip.sha256').read_text(encoding='ascii').split()[0],
+                             hashlib.sha256(archive.read_bytes()).hexdigest())
+
+    def test_fresh_output_contract_and_pair_publication_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            parent = Path(td).resolve()
+            output = parent / 'release'
+            with patch('sys.argv', ['package.py', '--output', str(output)]), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(package_main(), 0)
+                before = {path.name: path.read_bytes() for path in output.iterdir()}
+                with self.assertRaises(FileExistsError):
+                    package_main()
+                self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()}, before)
+            empty = parent / 'empty'; empty.mkdir()
+            with patch('sys.argv', ['package.py', '--output', str(empty)]), self.assertRaises(FileExistsError):
+                package_main()
+            self.assertEqual(list(empty.iterdir()), [])
+            for failure in ['checksum', 'publish']:
+                fresh = parent / failure
+                write_bytes, rename = Path.write_bytes, Path.rename
+                def fail_checksum(path, data):
+                    if path.suffix == '.sha256':
+                        raise PermissionError('injected checksum failure')
+                    return write_bytes(path, data)
+                def fail_publish(path, target):
+                    raise PermissionError('injected publication failure')
+                with patch('sys.argv', ['package.py', '--output', str(fresh)]), \
+                     patch.object(Path, 'write_bytes', fail_checksum if failure == 'checksum' else write_bytes), \
+                     patch.object(Path, 'rename', fail_publish if failure == 'publish' else rename), \
+                     self.assertRaises(PermissionError):
+                    package_main()
+                self.assertFalse(fresh.exists())
+                self.assertEqual(sorted(path.name for path in parent.iterdir()), ['empty', 'release'])
+                self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()}, before)
+
     def test_package_includes_the_eval_runner(self):
         entries = json.loads((ROOT / "package-manifest.json").read_text(encoding="utf-8"))
         self.assertIn("evals/runner.py", entries)
@@ -61,6 +112,56 @@ class PackageTests(unittest.TestCase):
                                      "--output", str(replay)], cwd=root, capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual((replay / "replay-summary.json").read_bytes(), original)
+
+    def test_extracted_unicode_adoption_with_ascii_process_encoding(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/package.py'), '--output', str(root / 'dist')],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(next((root / 'dist').glob('*.zip'))) as archive:
+                archive.extractall(root / 'extracted')
+            package = root / 'extracted' / ('unconventional-moves-' + version_for(ROOT))
+            env = {**os.environ, 'PYTHONIOENCODING': 'ascii', 'PYTHONDONTWRITEBYTECODE': '1'}
+            def run(*args):
+                result = subprocess.run([sys.executable, str(package / 'scripts/moves.py'), *map(str, args)],
+                                        cwd=root, env=env, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8'))
+                return result.stdout.decode('utf-8')
+            def read(path):
+                return json.loads(path.read_text(encoding='utf-8'))
+            def write(path, value):
+                path.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+            plan = read(package / 'examples/bounded-plan.json')
+            plan['goal'] = 'Practice caf\u00e9 vocabulary for \u6771\u4eac'
+            plan_path = root / 'plan.json'; write(plan_path, plan)
+            original = plan_path.read_bytes()
+            validation = subprocess.run([sys.executable, str(package / 'scripts/validate_plan.py'), str(plan_path), '--json'],
+                                        cwd=root, env=env, capture_output=True)
+            self.assertEqual(validation.returncode, 0, validation.stderr)
+            before = set(root.rglob('*'))
+            rendered = run('render', plan_path)
+            self.assertIn(plan['goal'], rendered)
+            self.assertEqual(set(root.rglob('*')), before, 'read-only rendering writes no files')
+            run('render', plan_path, '--output', root / 'render.md')
+            self.assertEqual((root / 'render.md').read_text(encoding='utf-8'), rendered)
+            run('observation-draft', plan_path, '--output', root / 'draft.json')
+            observation = read(root / 'draft.json')
+            observation.update(elapsed_hours=1, active_minutes=1, stop_triggered=True,
+                               notes='Fictional caf\u00e9 checkpoint in \u6771\u4eac. Stop remains binding.')
+            write(root / 'history.json', [observation])
+            run('handoff', plan_path, '--timeline', root / 'history.json', '--output', root / 'handoff.json')
+            bundle = read(root / 'handoff.json')
+            self.assertTrue(json.loads(run('verify-handoff', root / 'handoff.json'))['consistent'])
+            run('unpack-handoff', root / 'handoff.json', '--output-dir', root / 'restored')
+            self.assertEqual(read(root / 'restored/plan.json'), plan)
+            self.assertEqual(read(root / 'restored/checkpoints.json'), [observation])
+            restored = read(root / 'restored/handoff.json')
+            self.assertEqual(restored['plan_sha256'], bundle['plan_sha256'])
+            resumed = json.loads(run('timeline', root / 'restored/plan.json', root / 'restored/checkpoints.json'))
+            self.assertEqual(resumed['decision'], 'stop_and_review')
+            self.assertEqual(plan_path.read_bytes(), original)
 
     def test_same_environment_builds_are_identical_and_complete(self):
         import hashlib
