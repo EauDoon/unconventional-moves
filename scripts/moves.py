@@ -35,6 +35,8 @@ def read_plan(path: Path) -> dict:
 
 def emit(content: str, output: Path | None) -> None:
     if output is None:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='strict', newline='\n')
         print(content, end="" if content.endswith("\n") else "\n")
         return
     # Exclusive creation protects existing drafts, symlinks, and input files.

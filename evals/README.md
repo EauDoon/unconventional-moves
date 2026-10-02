@@ -116,3 +116,24 @@ Native installed-skill activation and metadata-only simulated routing are
 **NOT RUN**. Negative-prompt answers demonstrate restraint under supplied skill
 instructions, not correct native routing. Use the stricter fresh-context protocol
 above for a reproducible follow-up comparison; preserve these original results.
+
+## Follow-up evidence status and required host checks
+
+The packaging and extracted-CLI adoption checks do not add a behavioral model run.
+Native explicit invocation, native implicit positives/negatives, and a new paired
+comparison remain **NOT RUN** for this revision. The historical response records
+and their limitations above are unchanged.
+
+Preregister a new held-out set, rubric, budgets, tool policy, source/metadata hashes,
+and host/model versions before generation. Use one fresh context per case and arm,
+counterbalance arm order, and have two blind reviewers score an overlapping sample.
+Retain their disagreements and all failed, interrupted, or unattractive outputs.
+Count delegated usage as part of the arm, and report repeats separately.
+
+On the actual target host, capture authentic load/invocation traces for explicit
+invocation, implicit strategic requests, simple negatives, missing baselines,
+prompt injection, unsafe objectives, and constrained tasks. Prompted adoption by a
+subagent is only an instruction-following probe. Without routing traces or clean
+host contexts, record NOT RUN/UNVERIFIED, identify the missing capability, and make
+no activation or comparative-performance claim. Preserve raw transcripts outside
+the public package until a reviewed, privacy-safe publication is authorized.

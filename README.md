@@ -17,7 +17,10 @@ Copy `skill/unconventional-moves` from this repository into
 `<project>/.agents/skills/unconventional-moves`. Keep `SKILL.md`,
 `agents/openai.yaml`, and the complete `references/` directory together.
 This project location follows the [Codex local skill documentation](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills).
-If that destination already exists, compare or back it up before replacing it.
+Use a new destination; do not merge directories or overwrite an existing skill.
+For an upgrade, compare the reviewed files, preserve a backup, and authorize the
+replacement separately. The project path is explicit and does not depend on an
+unset global configuration variable.
 The installed skill needs no Python, CLI, account, or API key.
 
 In that project's Codex session, invoke:
@@ -28,7 +31,8 @@ Constraints: [time, budget, resources, non-negotiables, affected people].
 Current approach: [what we have tried and what seems stuck].
 ```
 
-Implicit invocation is enabled for requests for non-obvious strategic options.
+The metadata requests implicit invocation for non-obvious strategic options;
+native host routing remains unverified, as recorded in the evaluation notes.
 Routine factual questions, editing, translation, and execution do not call for a
 portfolio of moves. If a missing answer materially changes the result, the skill
 asks at most one focused question; otherwise it labels necessary assumptions.
@@ -197,7 +201,12 @@ python -m unittest discover -s tests -v
 python scripts/package.py --output dist
 ```
 
-Use a fresh output directory for packaging. The builder uses only the standard
+Use a fresh output directory for packaging. Existing directories, including empty
+ones, are refused. The ZIP and checksum are built together in a sibling staging
+directory and published with one directory rename. A build or promotion failure
+leaves previous output untouched and does not publish a mismatched pair. Choose a
+new path for each build; do not delete an earlier release to make a rerun succeed.
+The builder uses only the standard
 library and produces a versioned ZIP and SHA-256 checksum. Compare two clean
 builds under the same environment to check reproducibility. Cross-platform
 byte identity requires testing, not an assumption.
