@@ -331,6 +331,14 @@ class CheckpointReviewTests(unittest.TestCase):
             self.assertEqual(Decimal(remaining), Decimal(48) - Decimal("1e-300"))
         self.assertLess(Decimal(rows[1]["interval_activity_fraction"]), 1)
 
+    def test_interval_fraction_keeps_earlier_precision_when_intervals_are_exact(self):
+        # The values span more than 24 digits but subtract exactly, so the
+        # fraction keeps the 28 digits that 0.2.0 wrote into timeline handoffs.
+        row = {**self.first, "elapsed_hours": 10000, "active_minutes": 1.2345678901234568e-05}
+        checkpoint = moves.review_timeline(self.plan, [row])["checkpoints"][0]
+        self.assertEqual(checkpoint["interval_active_minutes"], "0.000012345678901234568")
+        self.assertEqual(checkpoint["interval_activity_fraction"], "2.057613150205761333333333333E-11")
+
     def test_activity_ledger_distinguishes_idle_and_full_intervals(self):
         observations = [self.first, self.second, {**self.second, "elapsed_hours": 1}]
         rows = moves.review_timeline(self.plan, observations)["checkpoints"]

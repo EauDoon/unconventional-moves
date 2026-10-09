@@ -570,6 +570,32 @@ class SelectionTests(unittest.TestCase):
                     self.assertEqual(Decimal(review["measurement"]["change_from_baseline"]),
                                      Decimal("-999999999999999999999999999999.99998"))
 
+    def test_progress_strings_match_earlier_releases_when_their_arithmetic_was_exact(self):
+        # verify-handoff recomputes these strings and requires an exact match,
+        # so bundles written by 0.2.0 must keep the same digits. The expected
+        # strings are what 0.2.0 produced for the same inputs.
+        from moves import measurement_context
+        experiment = bounded_example()["moves"][0]["experiment"]
+        for target, observed, change, progress in (
+                (7, 0.1 + 0.2, "0.30000000000000004", "0.04285714285714286285714285714285714"),
+                (7, 1e30, "1000000000000000000000000000000", "142857142857142857142857142857.1")):
+            with self.subTest(observed=observed):
+                measurement = measurement_context({**experiment, "baseline": 0, "target": target}, observed)
+                self.assertEqual(measurement["change_from_baseline"], change)
+                self.assertEqual(measurement["progress_fraction"], progress)
+
+    def test_progress_widens_when_earlier_precision_would_display_one(self):
+        # 0.2.0 rounded this fraction to 1.000000000000000000000000000, which
+        # claimed the observed value was the target.
+        from decimal import Decimal
+        from moves import measurement_context
+        experiment = {**bounded_example()["moves"][0]["experiment"],
+                      "baseline": 0, "target": 5000000000000000000000000001}
+        measurement = measurement_context(experiment, 5000000000000000000000000002)
+        self.assertEqual(measurement["change_from_baseline"], "5000000000000000000000000002")
+        self.assertEqual(measurement["progress_fraction"], "1.000000000000000000000000000200")
+        self.assertGreater(Decimal(measurement["progress_fraction"]), 1)
+
     def test_observation_draft_requires_completion_and_matches_selection(self):
         from moves import observation_draft, evaluate_outcome, select_plan
         plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")

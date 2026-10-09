@@ -12,8 +12,9 @@ import math
 import re
 import sys
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path
-from decimal import Decimal, localcontext
+from decimal import Decimal, Inexact, localcontext
 from datetime import date
 from urllib.parse import urlsplit
 
@@ -253,16 +254,51 @@ def _exact_precision(*numbers: Decimal) -> int:
     return max(28, max(highs) - min(lows) + 4)
 
 
+def _legacy_precision(*numbers: Decimal) -> int:
+    """The progress precision of 0.2.0: at least 28 digits, and at least each
+    finite operand's digit count plus the size of its exponent."""
+    precision = 28
+    for number in numbers:
+        if number.is_finite():
+            _sign, digits, exponent = number.as_tuple()
+            precision = max(precision, len(digits) + abs(exponent))
+    return precision
+
+
+def _working_precision(legacy: int, operands: tuple[Decimal, ...], steps: Callable[[], object]) -> int:
+    """The precision 0.2.0 used, widened only where it rounds an exact step.
+
+    verify-handoff recomputes every derived string and requires an exact match,
+    so an inexact quotient must keep the precision it was first written with.
+    When that precision rounds a difference or product in steps(), the earlier
+    output was wrong, and the combined range of the operands is used instead.
+    """
+    with localcontext() as context:
+        context.prec = legacy
+        context.clear_flags()
+        steps()
+        if not context.flags[Inexact]:
+            return legacy
+    return max(legacy, _exact_precision(*operands))
+
+
 def measurement_context(experiment: dict, observed: int | float | None) -> dict:
     result = {key: experiment[key] for key in ("metric", "baseline", "target", "direction")}
     result.update(observed_value=observed, change_from_baseline=None, progress_fraction=None)
     if observed is not None:
-        baseline, target, value = (Decimal(str(number)) for number in
-                                   (experiment["baseline"], experiment["target"], observed))
+        operands = tuple(Decimal(str(number)) for number in (experiment["baseline"], experiment["target"], observed))
+        baseline, target, value = operands
         with localcontext() as context:
-            context.prec = _exact_precision(baseline, target, value)
-            result["change_from_baseline"] = str(value - baseline)
-            result["progress_fraction"] = str((value - baseline) / (target - baseline))
+            context.prec = _working_precision(_legacy_precision(*operands), operands,
+                                              lambda: (value - baseline, target - baseline))
+            change, span = value - baseline, target - baseline
+            fraction = change / span
+            if fraction == 1 and change != span:
+                # A rounded quotient must not claim that the observed value is the target.
+                context.prec = max(context.prec, _exact_precision(*operands))
+                fraction = change / span
+            result["change_from_baseline"] = str(change)
+            result["progress_fraction"] = str(fraction)
     return result
 
 
@@ -551,7 +587,9 @@ def review_timeline(plan: dict, observations: object) -> dict:
         # The first interval starts at zero; later ones at the previous checkpoint.
         start_hours, start_minutes = Decimal(str(max(0, previous_hours))), Decimal(str(max(0, previous_minutes)))
         with localcontext() as context:
-            context.prec = _exact_precision(elapsed, active, start_hours, start_minutes, Decimal(60))
+            # 0.2.0 computed checkpoint intervals at 28 digits.
+            context.prec = _working_precision(28, (elapsed, active, start_hours, start_minutes, Decimal(60)),
+                                              lambda: ((elapsed - start_hours) * 60, active - start_minutes))
             interval_hours = elapsed - start_hours
             interval_minutes = active - start_minutes
             if index > 1 and interval_minutes > interval_hours * 60:
