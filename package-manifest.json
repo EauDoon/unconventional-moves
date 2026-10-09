@@ -55,6 +55,7 @@
   "scripts/package.py",
   "scripts/validate.py",
   "scripts/validate_plan.py",
+  "scripts/versioning.py",
   "skill/unconventional-moves/SKILL.md",
   "skill/unconventional-moves/agents/openai.yaml",
   "skill/unconventional-moves/references/moves-v0.2.schema.json",

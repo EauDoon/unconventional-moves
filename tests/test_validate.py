@@ -14,6 +14,78 @@ from validate import Checker, UNSAFE_STRUCTURE
 from validate_plan import contains_unsafe_action
 from validate_plan import load_plan_json, validate_plan_data
 from validate_plan import main as validate_plan_main
+from versioning import changelog_problems, release_notes
+
+
+VALID_CHANGELOG = (
+    "# Changelog\n\n"
+    "## [Unreleased]\n\n### Fixed\n\n- Synthetic pending fix.\n\n"
+    "## [0.2.0] - 2026-09-09\n\n### Added\n\n- Synthetic second release.\n\n"
+    "## [0.1.0] - 2026-08-03\n\n### Added\n\n- Synthetic first release.\n\n"
+    "[Unreleased]: https://example.test/compare/v0.2.0...HEAD\n"
+    "[0.2.0]: https://example.test/compare/v0.1.0...v0.2.0\n"
+    "[0.1.0]: https://example.test/releases/tag/v0.1.0\n"
+)
+
+
+class ChangelogTests(unittest.TestCase):
+    def problems_for(self, changelog: str, version: str = "0.2.0") -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "VERSION").write_text(version + "\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+            return changelog_problems(root)
+
+    def test_repository_changelog_matches_version(self) -> None:
+        self.assertEqual(changelog_problems(ROOT), [])
+
+    def test_valid_synthetic_changelog_passes(self) -> None:
+        self.assertEqual(self.problems_for(VALID_CHANGELOG), [])
+
+    def test_each_contract_violation_is_reported(self) -> None:
+        cases = {
+            "newest release ahead of VERSION": VALID_CHANGELOG.replace(
+                "## [0.2.0] - 2026-09-09", "## [0.3.0] - 2026-09-11\n\n- Premature.\n\n## [0.2.0] - 2026-09-09"),
+            "missing unreleased": VALID_CHANGELOG.replace("## [Unreleased]\n\n### Fixed\n\n- Synthetic pending fix.\n\n", ""),
+            "undated release": VALID_CHANGELOG.replace("## [0.2.0] - 2026-09-09", "## 0.2.0"),
+            "impossible date": VALID_CHANGELOG.replace("2026-09-09", "2026-02-30"),
+            "ascending versions": VALID_CHANGELOG.replace("[0.1.0] - 2026-08-03", "[0.3.0] - 2026-08-03"),
+            "dates increase downward": VALID_CHANGELOG.replace("2026-08-03", "2026-10-01"),
+            "duplicate unreleased": VALID_CHANGELOG.replace("## [0.1.0]", "## [Unreleased]\n\n## [0.1.0]"),
+            "non-ASCII digits": VALID_CHANGELOG.replace("[0.2.0] - 2026-09-09", "[0.2.0] - 2026-09-0\uff19"),
+        }
+        for name, changelog in cases.items():
+            with self.subTest(case=name):
+                self.assertTrue(self.problems_for(changelog), name)
+
+    def test_version_without_matching_release_fails_repository_check(self) -> None:
+        self.assertTrue(any("does not match VERSION 0.9.9" in problem
+                            for problem in self.problems_for(VALID_CHANGELOG, "0.9.9")))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "VERSION").write_text("0.9.9\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text(VALID_CHANGELOG, encoding="utf-8")
+            checker = Checker(root)
+            checker.run()
+            self.assertIn("VERSION matches the newest CHANGELOG release", checker.failures)
+            self.assertTrue(any(item.startswith("changelog: newest release") for item in checker.failures))
+
+    def test_missing_files_are_problems_not_exceptions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(changelog_problems(root), ["VERSION is missing or invalid"])
+            (root / "VERSION").write_text("0.2.0\n", encoding="utf-8")
+            self.assertEqual(changelog_problems(root), ["CHANGELOG.md is missing or not UTF-8"])
+            (root / "CHANGELOG.md").write_bytes(b"## [Unreleased]\n\xff\n")
+            self.assertEqual(changelog_problems(root), ["CHANGELOG.md is missing or not UTF-8"])
+
+    def test_release_notes_return_one_section_without_link_references(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CHANGELOG.md").write_text(VALID_CHANGELOG, encoding="utf-8")
+            self.assertEqual(release_notes(root, "0.2.0"), "### Added\n\n- Synthetic second release.\n")
+            self.assertEqual(release_notes(root, "0.1.0"), "### Added\n\n- Synthetic first release.\n")
+            self.assertIsNone(release_notes(root, "9.9.9"))
 
 
 class ValidateTests(unittest.TestCase):

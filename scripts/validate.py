@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from validate_plan import contains_unsafe_action, load_plan_json, validate_plan_data
+from versioning import changelog_problems
 
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
@@ -279,6 +280,10 @@ class Checker:
         self.ok(len(re.findall(r"^\*\*Prioritized action:", skill, re.MULTILINE)) == 1, "skill names one prioritized action contract")
         self.ok("display_name: \"Unconventional Moves\"" in yaml, "metadata display name is stable")
         self.ok("scripts/validate.py" in readme and "schemas/moves.schema.json" in readme, "README exposes validator and schema")
+
+        problems = changelog_problems(self.root)
+        self.ok(not problems, "VERSION matches the newest CHANGELOG release")
+        self.failures.extend(f"changelog: {problem}" for problem in problems)
 
         schema = self.json_file("schemas/moves.schema.json")
         if isinstance(schema, dict):

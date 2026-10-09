@@ -248,6 +248,7 @@ class PackageTests(unittest.TestCase):
             root = Path(td) / "project"
             (root / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
+            shutil.copy2(ROOT / "scripts/versioning.py", root / "scripts/versioning.py")
             (root / "package-manifest.json").write_text("[]", encoding="utf-8")
             output = root / "dist"
 
@@ -262,14 +263,20 @@ class PackageTests(unittest.TestCase):
                         for path in root.rglob("*")
                     }
 
+                    # Importing the copied versioning.py must not add a
+                    # bytecode cache to the snapshot; only package output counts.
                     result = subprocess.run(
                         [sys.executable, str(root / "scripts/package.py"), "--output", str(output)],
+                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                         capture_output=True,
                         text=True,
                         check=False,
                     )
 
                     self.assertNotEqual(result.returncode, 0)
+                    # Fail on the VERSION check itself, not on a missing import.
+                    self.assertIn("FAIL package could not be created", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
                     self.assertFalse(output.exists())
                     self.assertEqual(
                         {
@@ -284,6 +291,7 @@ class PackageTests(unittest.TestCase):
             root = Path(td) / "project"
             (root / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
+            shutil.copy2(ROOT / "scripts/versioning.py", root / "scripts/versioning.py")
             (root / "VERSION").write_text("0.1.0\n", encoding="utf-8")
             (root / "payload.txt").write_text("release content\n", encoding="utf-8")
             manifest = root / "package-manifest.json"
