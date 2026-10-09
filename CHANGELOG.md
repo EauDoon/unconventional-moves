@@ -34,6 +34,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Fixed
 
+- Limit the repository check's dash, safety, and link scans to project files, skipping version control, build output, tool caches, and any directory holding a `pyvenv.cfg`, so an in-repo virtual environment no longer fails the check; a Markdown file that is not UTF-8 is now reported as a failure instead of raising `UnicodeDecodeError`.
 - Report `move_order_changed` in `compare` only when moves kept in both revisions change their relative order, instead of whenever a move is added or removed.
 - Group a bare-host source URL such as `https://example.test` with the same URL ending in `/` in the source audit.
 - Size decimal precision from the combined magnitude range of all operands in progress, checkpoint interval, and remaining bound arithmetic, so a baseline of 1e30 with an observed 2e-5 no longer displays a progress fraction of 1 for a missed target, and an interval overrun of 6e-299 minutes is rejected instead of rounded away.

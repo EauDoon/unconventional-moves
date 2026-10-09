@@ -530,6 +530,40 @@ class ValidateTests(unittest.TestCase):
                     checker.checks + checker.failures,
                 )
 
+    def test_virtual_environments_and_caches_are_not_scanned(self) -> None:
+        # Write the dash as an escape: a literal one would fail this repository's own check.
+        note = "Third-party text \u2013 [outside](../outside.md)\n"
+        for skipped in ("venv/lib", ".venv/lib", "node_modules/pkg", ".pytest_cache/v", "nested/dist"):
+            with self.subTest(skipped=skipped), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                folder = root / skipped
+                folder.mkdir(parents=True)
+                if "venv" in skipped:
+                    (folder.parent / "pyvenv.cfg").write_text("home = synthetic\n", encoding="utf-8")
+                (folder / "notes.md").write_text(note, encoding="utf-8")
+                checker = Checker(root)
+                checker.check_text_files()
+                checker.check_links()
+                self.assertEqual(checker.failures, [])
+                self.assertFalse(any("notes.md" in item for item in checker.checks), checker.checks)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "lib").mkdir()
+            (root / "lib" / "notes.md").write_text(note, encoding="utf-8")
+            checker = Checker(root)
+            checker.check_text_files()
+            checker.check_links()
+            self.assertIn("no em or en dash: " + str(Path("lib/notes.md")), checker.failures)
+            self.assertIn("link exists: " + str(Path("lib/notes.md")) + " -> ../outside.md", checker.failures)
+
+    def test_non_utf8_markdown_is_a_failure_not_an_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_bytes("Caf\u00e9 notes\n".encode("latin-1"))
+            checker = Checker(root)
+            checker.check_links()
+            self.assertEqual(checker.failures, ["markdown is UTF-8: README.md"])
+
     def test_multiline_reference_definition_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

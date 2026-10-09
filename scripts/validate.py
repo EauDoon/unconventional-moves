@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -17,6 +18,11 @@ from versioning import changelog_problems
 
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
+# Version control, build output, and tool caches. A file with one of these
+# names (such as a worktree's .git file) is skipped as well.
+SKIPPED_DIRECTORIES = frozenset({
+    ".git", "dist", "__pycache__", "node_modules", ".tox", ".mypy_cache", ".pytest_cache",
+})
 MARKDOWN_ESCAPABLE = frozenset(r'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
 # Em dash (U+2014, ASCII minus here), en dash (U+2013, ASCII minus here), figure dash (U+2012), horizontal bar (U+2015),
 # minus sign (U+2212), and the mdash entity / ndash entity HTML entities.
@@ -141,6 +147,21 @@ def inline_link_targets(text: str):
             yield None, f"offset {marker}: {exc}"
 
 
+def project_files(root: Path):
+    """Yield project files under root.
+
+    Skip version control, build output, tool caches, and virtual environments
+    (any directory holding a pyvenv.cfg); they are not project content.
+    """
+    for directory, dirnames, filenames in os.walk(root):
+        base = Path(directory)
+        dirnames[:] = [name for name in dirnames
+                       if name not in SKIPPED_DIRECTORIES and not (base / name / "pyvenv.cfg").is_file()]
+        for name in filenames:
+            if name not in SKIPPED_DIRECTORIES:
+                yield base / name
+
+
 def reference_definition_bodies(text: str):
     offset = 0
     for raw_line in text.splitlines(keepends=True):
@@ -216,10 +237,12 @@ class Checker:
 
     def check_links(self) -> None:
         root_resolved = self.root.resolve()
-        for path in sorted(self.root.rglob("*.md")):
-            if ".git" in path.parts or "dist" in path.parts:
+        for path in sorted(path for path in project_files(self.root) if path.suffix == ".md"):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                self.ok(False, f"markdown is UTF-8: {path.relative_to(self.root)}")
                 continue
-            content = path.read_text(encoding="utf-8")
             targets = chain(inline_link_targets(content), reference_link_targets(content))
             for target, syntax_error in targets:
                 if syntax_error:
@@ -382,8 +405,13 @@ class Checker:
             self.ok(expected.issubset(set(ids)), "adversarial fixtures cover four required behaviors")
             self.ok(len(ids) == len(set(ids)), "adversarial fixture IDs are unique")
 
-        for path in sorted(self.root.rglob("*")):
-            if not path.is_file() or ".git" in path.parts or "dist" in path.parts:
+        self.check_text_files()
+        self.check_links()
+
+    def check_text_files(self) -> None:
+        """Apply the dash ban and the lexical safety screen to project text files."""
+        for path in sorted(project_files(self.root)):
+            if not path.is_file():
                 continue
             try:
                 content = path.read_text(encoding="utf-8")
@@ -393,7 +421,6 @@ class Checker:
             if path.suffix in {".md", ".yaml", ".yml", ".json"}:
                 self.ok(not contains_unsafe_action(content, UNSAFE_STRUCTURE),
                         f"no unqualified lexical safety-pattern match: {path.relative_to(self.root)}")
-        self.check_links()
 
 
 def main() -> int:
