@@ -140,7 +140,7 @@ python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 
 Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
 
-The source audit also groups repeated URLs (ignoring fragments, host case, and default or empty ports) and equal declared publisher names (ignoring case, repeated whitespace, and format characters such as zero-width spaces). Groups use the original one-based source positions and preserve every citation. Different URL paths, queries, and non-default ports remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
+The source audit also groups repeated URLs (ignoring fragments, host case, and default or empty ports, and treating an empty http or https path as `/`) and equal declared publisher names (ignoring case, repeated whitespace, and format characters such as zero-width spaces). Groups use the original one-based source positions and preserve every citation. Different URL paths, queries, and non-default ports remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
 
 ## Cumulative checkpoints
 
@@ -231,7 +231,7 @@ Use `python scripts/moves.py debrief draft.json checkpoints.json --output debrie
 python scripts/moves.py compare draft.json revised.json --output changes.json
 ```
 
-The report matches moves by ID, distinguishes reordering from content changes, and shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.
+The report matches moves by ID and distinguishes reordering from content changes. `move_order_changed` means that moves kept in both revisions changed their relative order; an added or removed move appears in `added_move_ids` or `removed_move_ids` and is not reported as a reorder. The report shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.
 
 ## Replay a complete synthetic history
 

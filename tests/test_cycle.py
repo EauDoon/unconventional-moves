@@ -227,6 +227,20 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertEqual(result["repeated_url_groups"], [[1, 2, 3], [5, 6], [7, 8]])
         self.assertNotIn(4, [index for group in result["repeated_url_groups"] for index in group])
 
+    def test_bare_host_urls_group_with_the_root_path(self):
+        urls = [
+            "https://example.test",
+            "https://EXAMPLE.test/",
+            "HTTPS://example.test:443/#x",
+            "https://example.test/a",
+            "https://example.test?q=1",
+            "https://example.test/?q=1",
+        ]
+        self.plan["sources"] = [{"title": "Synthetic language source", "url": url,
+                                  "supports": "Practice hypothesis"} for url in urls]
+        result = moves.audit_sources(self.plan, "2026-09-11", 30)
+        self.assertEqual(result["repeated_url_groups"], [[1, 2, 3], [5, 6]])
+
     def test_screen_respects_start_and_duration_without_reselection(self):
         self.plan["moves"][1]["experiment"].update(start_within_hours=0, duration_hours=1)
         result = moves.screen_moves(self.plan, 20, "self_only", 0, 1)

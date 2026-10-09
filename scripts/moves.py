@@ -301,9 +301,12 @@ def compare_plans(before: dict, after: dict) -> dict:
                 triggers.append({"move_id": move["move_id"], "field": field, "reason": reason})
     for move_id in sorted(old.keys() ^ new.keys()):
         triggers.append({"move_id": move_id, "field": "move", "reason": "move_added_or_removed"})
+    # A reorder is a change in the relative order of moves kept in both
+    # revisions. Adding or removing a move is reported separately above.
+    move_order_changed = [move_id for move_id in old if move_id in new] != [move_id for move_id in new if move_id in old]
     return {"before_sha256": plan_digest(before), "after_sha256": plan_digest(after),
             "added_move_ids": sorted(new.keys() - old.keys()), "removed_move_ids": sorted(old.keys() - new.keys()),
-            "move_order_changed": list(old) != list(new), "changed_moves": changed, "metadata_changes": metadata,
+            "move_order_changed": move_order_changed, "changed_moves": changed, "metadata_changes": metadata,
             "review_triggers": triggers, "observation_binding_changed": plan_digest(before) != plan_digest(after),
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
@@ -463,7 +466,7 @@ def iso_date(value: str) -> date:
 
 
 def _citation_url_key(value: str) -> str:
-    """Group citations that differ only by fragment, host case, or default port."""
+    """Group citations that differ only by fragment, host case, default port, or an empty path."""
     parsed = urlsplit(value)
     hostname = parsed.hostname
     if not hostname:
@@ -475,7 +478,9 @@ def _citation_url_key(value: str) -> str:
         port = None
     bracketed = f"[{host}]" if ":" in host else host
     netloc = bracketed if port is None else f"{bracketed}:{port}"
-    return parsed._replace(scheme=scheme, netloc=netloc, fragment="").geturl()
+    # For http(s), a bare host names the same resource as the host plus "/".
+    path = "/" if scheme in {"http", "https"} and not parsed.path else parsed.path
+    return parsed._replace(scheme=scheme, netloc=netloc, path=path, fragment="").geturl()
 
 
 def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:

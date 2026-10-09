@@ -376,6 +376,27 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result["removed_move_ids"], ["move-05"])
 
 
+    def test_adding_or_removing_a_move_is_not_a_reorder(self):
+        from moves import compare_plans
+        before = bounded_example()
+        appended = copy.deepcopy(before)
+        appended["moves"].append(dict(copy.deepcopy(before["moves"][0]), id="move-06"))
+        self.assertEqual(validate_plan_data(appended), [])
+        result = compare_plans(before, appended)
+        self.assertEqual(result["added_move_ids"], ["move-06"])
+        self.assertFalse(result["move_order_changed"])
+        self.assertTrue(result["observation_binding_changed"])
+        removed = copy.deepcopy(before)
+        removed["moves"] = [move for move in removed["moves"] if move["id"] != "move-05"]
+        removed["moves"].append(dict(copy.deepcopy(before["moves"][0]), id="move-07"))
+        result = compare_plans(before, removed)
+        self.assertEqual(result["removed_move_ids"], ["move-05"])
+        self.assertFalse(result["move_order_changed"])
+        swapped = copy.deepcopy(appended)
+        swapped["moves"][1], swapped["moves"][2] = swapped["moves"][2], swapped["moves"][1]
+        self.assertTrue(compare_plans(before, swapped)["move_order_changed"])
+
+
 class PackagedWorkflowTests(unittest.TestCase):
     def test_extracted_package_and_synthetic_install(self):
         import hashlib
