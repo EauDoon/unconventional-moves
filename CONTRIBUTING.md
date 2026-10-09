@@ -47,6 +47,24 @@ and evidence boundaries.
    model evaluations must record prompts, runtime, outputs, and independent
    review where available. Report unexecuted behavioral comparisons as NOT RUN.
 
+## Releasing
+
+`VERSION` is the single source of the package version; `CHANGELOG.md` follows
+Keep a Changelog, and every change adds its entry under `[Unreleased]`.
+
+1. In one commit, set `VERSION` to the new `X.Y.Z`, retitle `[Unreleased]` as
+   `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty `[Unreleased]` above it, and
+   update the compare links at the bottom.
+2. Run `python scripts/check.py` and
+   `python scripts/versioning.py --check-tag vX.Y.Z`; both must pass.
+3. Merge the pull request with a merge commit, not a squash.
+4. On the updated `main`, run `git tag -a vX.Y.Z -m vX.Y.Z` and push the tag.
+   The release workflow checks the tag against `VERSION`, reruns the check
+   set, builds the archive and checksum, attests the archive, and publishes a
+   GitHub Release whose notes are that CHANGELOG section.
+5. Never delete and push a published tag again. If the workflow fails, fix
+   the cause and rerun it, or ship the fix in a new patch release.
+
 Product direction, evaluation, review, and acceptance remain with EauDoon.
 Contributors must disclose material third-party provenance and licensing
 obligations. Checks, hashes, source declarations, and selection fields do not

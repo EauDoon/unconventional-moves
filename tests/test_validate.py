@@ -149,6 +149,31 @@ class WorkflowPinTests(unittest.TestCase):
             with self.subTest(workflow=name, line=number):
                 self.assertIsNotNone(pinned.fullmatch(line), line)
 
+    def test_workflow_expressions_stay_out_of_run_scripts(self):
+        workflows = ROOT / ".github" / "workflows"
+        if not workflows.is_dir():
+            self.skipTest("workflows are not shipped in the package")
+        # An expression expanded inside a run script is spliced into shell
+        # source before it runs. Pass values through env or with: instead.
+        allowed = re.compile(r"\s*(?:group|cancel-in-progress|runs-on|python-version|subject-path|GH_TOKEN|GH_REPO):\s")
+        for path in sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")]):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "${{" in line:
+                    with self.subTest(workflow=path.name, line=number):
+                        self.assertIsNotNone(allowed.match(line), line)
+
+    def test_release_workflow_runs_only_for_version_tags(self):
+        release = ROOT / ".github" / "workflows" / "release.yml"
+        if not release.is_file():
+            self.skipTest("workflows are not shipped in the package")
+        text = release.read_text(encoding="utf-8")
+        self.assertIn('tags: ["v*.*.*"]', text)
+        self.assertNotIn("pull_request", text)
+        self.assertIn("python scripts/versioning.py --check-tag", text)
+        self.assertLess(text.index("--check-tag"), text.index("gh release create"))
+        for permission in ("contents: write", "id-token: write", "attestations: write"):
+            self.assertIn(permission, text)
+
 
 class ValidateTests(unittest.TestCase):
     def test_repository_screen_distinguishes_boundary_from_action(self):

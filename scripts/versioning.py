@@ -133,3 +133,43 @@ def release_notes(root: Path, version: str) -> str | None:
         lines = [line for line in body if not LINK_REFERENCE.match(line)]
         return "\n".join(lines).strip("\n") + "\n"
     return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Release gate used by .github/workflows/release.yml."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--check-tag", metavar="TAG",
+                        help="exit 0 only when TAG is v plus VERSION and CHANGELOG dates that release")
+    action.add_argument("--notes", metavar="X.Y.Z", help="print the CHANGELOG section of a dated release")
+    args = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
+    if args.notes is not None:
+        notes = release_notes(ROOT, args.notes)
+        if notes is None:
+            print(f"FAIL CHANGELOG.md has no dated release {ascii(args.notes)}", file=sys.stderr)
+            return 1
+        print(notes, end="")
+        return 0
+    try:
+        version = read_version(ROOT)
+    except (OSError, ValueError):
+        print("FAIL VERSION is missing or invalid", file=sys.stderr)
+        return 1
+    problems = [] if args.check_tag == "v" + version else [
+        f"tag {ascii(args.check_tag)} does not match VERSION; expected v{version}"]
+    problems.extend(changelog_problems(ROOT, version))
+    if release_notes(ROOT, version) is None:
+        problems.append(f"CHANGELOG.md has no dated [{version}] section")
+    for problem in problems:
+        print("FAIL " + problem, file=sys.stderr)
+    if problems:
+        return 1
+    print(f"PASS tag v{version} matches VERSION and a dated CHANGELOG release")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

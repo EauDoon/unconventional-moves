@@ -388,5 +388,39 @@ class VersionFlagTests(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
 
 
+class ReleaseGateTests(unittest.TestCase):
+    """The release workflow publishes only when these commands succeed."""
+
+    def run_versioning(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "scripts/versioning.py"), *args], cwd=ROOT,
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def test_check_tag_requires_v_plus_version(self):
+        version = version_for(ROOT)
+        result = self.run_versioning("--check-tag", "v" + version)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for tag in ("v0.0.1", "X", version, "v" + version + "-rc1", ""):
+            with self.subTest(tag=tag):
+                result = self.run_versioning("--check-tag", tag)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("FAIL tag", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_notes_print_one_dated_section(self):
+        from versioning import release_notes
+        version = version_for(ROOT)
+        result = self.run_versioning("--notes", version)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, release_notes(ROOT, version))
+        self.assertIn("\n- ", result.stdout)
+        self.assertNotIn("## [", result.stdout)
+        self.assertNotIn("/compare/", result.stdout)
+        result = self.run_versioning("--notes", "9.9.9")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("FAIL", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

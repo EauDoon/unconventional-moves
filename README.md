@@ -230,6 +230,13 @@ directory to the project skill location above. A checksum detects a content
 mismatch; it does not authenticate the publisher. Packaging does not publish
 or change remote metadata.
 
+Archives published on the GitHub Releases page are built by the release
+workflow from a `vX.Y.Z` tag that must match `VERSION`, and carry a GitHub
+build provenance attestation. Check one with
+`gh attestation verify unconventional-moves-X.Y.Z.zip --repo EauDoon/unconventional-moves`.
+The attestation ties the archive to this repository's workflow run at that
+tag; it does not certify content, safety, or approval.
+
 Structural tests check contracts and workflow behavior. They do not prove
 mechanism diversity or better decisions. See [behavioral evaluation](evals/README.md)
 for the frozen rubric, optional model comparison, actual results, and limitations.
@@ -247,6 +254,7 @@ Ordinary tests remain offline.
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
 | [Check runner](scripts/check.py) | The CI check set in one command |
+| [Release gate](scripts/versioning.py) | Reads `VERSION`, checks CHANGELOG, and gates tagged releases |
 | [Security](SECURITY.md) | Security scope and reporting guidance |
 | [Contributing](CONTRIBUTING.md) | Contribution and verification rules |
 | [Provenance](PROVENANCE.md) | Origin and independence disclosures |

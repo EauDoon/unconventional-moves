@@ -11,6 +11,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Added
 
+- Add a tag-triggered release workflow. For a `vX.Y.Z` tag it checks that the tag matches `VERSION` and a dated CHANGELOG section (`scripts/versioning.py --check-tag`), reruns the check set, builds the archive and checksum, records a GitHub build provenance attestation for the archive, and publishes a GitHub Release whose notes are that CHANGELOG section (`--notes`). CONTRIBUTING documents the release steps, and tests keep workflow expressions out of run scripts.
 - Add `--version` to `moves.py`, `moves_cli.py`, `validate_plan.py`, `validate.py`, `package.py`, and `check.py`. It prints `unconventional-moves X.Y.Z` from the root `VERSION` file, including from an extracted archive, and exits 1 with a clear message when `VERSION` is invalid.
 - Add `scripts/check.py`, which runs the CI check set in order (repository validation, both example plan validators, the outcome replay, the unit tests, the eval fixture runner, and a package build into a temporary directory) and stops at the first failure. CI now runs this one script, and README, CONTRIBUTING, and the eval README point to it; `--list` prints the commands.
 - Check in `scripts/validate.py` that this changelog keeps `[Unreleased]` first, lists dated releases from newest to oldest, and names `VERSION` as the newest release.
