@@ -10,13 +10,19 @@ actually have, not the version you wish you had.
 
 Both schemas require `contract_version`, `goal`, `high_stakes`, `moves`,
 `prioritized_action`, and `sources`, with `moves` constrained to five to
-seven entries. Version 0.2 adds one required top-level field:
-`selected_move_id` (non-empty string that names an existing move). If you
-cannot point at exactly one chosen move, you are not ready for v0.2.
+seven entries. Version 0.2 adds one required top-level field,
+`selected_move_id`, which the schema requires to be a non-empty string.
+`scripts/validate_plan.py` also requires it to name an existing move. If
+you cannot point at exactly one chosen move, you are not ready for v0.2.
 
 Sources follow the same shape in both versions: each entry has `title`,
-`url`, and `supports`; `publisher` and `date` are optional. Both require
-a nonempty `sources` array when `high_stakes` is true.
+`url`, and `supports`; `publisher` and `date` are optional. The schemas
+require a `sources` array and a URL that starts with a lowercase `http://`
+or `https://`. Only `scripts/validate_plan.py` enforces further rules that
+the schemas do not encode: unique move IDs, at least one source when
+`high_stakes` is true, and a source URL with a host and an `http` or
+`https` scheme in any letter case. Validate plans with that script rather
+than with a JSON Schema validator alone.
 
 ## Required move fields
 

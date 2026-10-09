@@ -64,6 +64,7 @@
   "skill/unconventional-moves/references/strategy-review.md",
   "templates/worksheet.md",
   "tests/test_cycle.py",
+  "tests/test_docs.py",
   "tests/test_evals.py",
   "tests/test_handoff_restore.py",
   "tests/test_package.py",

@@ -37,6 +37,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Fixed
 
+- Correct the documentation: the version decision tree no longer credits the JSON Schemas with rules only `scripts/validate_plan.py` enforces (an existing selected move, unique IDs, a source for high-stakes plans, case-insensitive URL schemes); the usage recipes say they call `moves.py` directly; Recipe 4 now shows the synthetic observation values and creates its second observation, so it runs; and two misfiled local workflow sections are moved under the right headings. `tests/test_docs.py` executes every usage recipe and the README offline workflow.
 - Limit the repository check's dash, safety, and link scans to project files, skipping version control, build output, tool caches, and any directory holding a `pyvenv.cfg`, so an in-repo virtual environment no longer fails the check; a Markdown file that is not UTF-8 is now reported as a failure instead of raising `UnicodeDecodeError`.
 - Report `move_order_changed` in `compare` only when moves kept in both revisions change their relative order, instead of whenever a move is added or removed.
 - Group a bare-host source URL such as `https://example.test` with the same URL ending in `/` in the source audit.

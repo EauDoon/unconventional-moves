@@ -160,6 +160,8 @@ The shared outcome validator also compares cumulative elapsed time in decimal, a
 
 Each timeline row includes decimal-string interval hours, active minutes, and activity fraction. The first interval begins at zero; a zero-length initial interval has a `null` fraction. Later idle intervals report zero activity. These describe reported effort, not productivity or an instruction to use the remaining time.
 
+Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
+
 ### Export checkpoint history to a spreadsheet
 
 ```sh
@@ -183,7 +185,7 @@ Every row retains `human_review_required`. The entire history is validated befor
 output is created, and existing files are never overwritten. JSON remains the
 default format and existing handoffs are unchanged.
 
-## Measurement context
+## Record cumulative checkpoints
 
 Use `python scripts/moves.py record draft.json observation.json --output checkpoints.json` to begin a checkpoint history. Add `--history checkpoints.json --output next-checkpoints.json` for the next observation. The complete history is validated before a new file is created. Existing history is never rewritten. Reports may retain honest after-stop observations; recording one does not authorize activity after a stop.
 
@@ -194,8 +196,6 @@ An explicitly supplied history must be a JSON array, including `[]` for an inten
 Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings (or `null` without a measurement). Precision spans the combined magnitude range of the baseline, target, and observed value (from the largest leading digit to the smallest trailing digit), with at least 28 significant digits, so differences stay exact, extreme finite inputs stay finite, and a displayed fraction of 1 means the observed value is the numeric target. Remaining and overrun bounds use the same rule. A negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
 
 ## Observation drafts
-
-Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
 
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 

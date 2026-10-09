@@ -4,9 +4,12 @@ Five copy-paste recipes that exercise the actual offline CLI. They use only
 files and commands that ship in this repository: `examples/example-plan.json`
 is a v0.1 plan, `examples/bounded-plan.json` is a v0.2 bounded plan, and
 `examples/bounded-outcome.json` is a synthetic outcome bound to its plan
-revision. Every recipe uses `python scripts/moves.py <command>` with flags
-that exist in `scripts/moves.py` and the version gate in `scripts/moves_cli.py`.
-Replace the output filenames when an artifact already exists. A successful
+revision. Every recipe calls `python scripts/moves.py <command>` directly,
+with flags that exist in `scripts/moves.py`. `scripts/moves_cli.py` accepts
+the same commands and adds an earlier refusal of a v0.1 plan for v0.2-only
+commands. The recipes run in order from one working directory, and
+`tests/test_docs.py` executes them. Replace the output filenames when an
+artifact already exists. A successful
 exit code only means a report was produced; it does not approve or start
 anything.
 
@@ -77,14 +80,52 @@ before creating a new file. The history is never rewritten; each
 checkpoint file is a separate artifact. After two or more records, export
 the validated history to a spreadsheet-safe CSV.
 
+The `observation.json` draft from Recipe 3 starts unfilled, and its empty
+notes deliberately fail validation. For this fictional walkthrough only,
+set these fields and keep the generated digest, move ID, and other fields
+unchanged. For real work, enter actual observations and leave an
+unavailable value `null`.
+
+```json
+{
+  "elapsed_hours": 24,
+  "active_minutes": 10,
+  "observed_value": 1,
+  "notes": "Synthetic replay only, no experiment occurred."
+}
+```
+
+Record the first checkpoint, then prepare a second draft bound to the same
+revision:
+
 ```sh
 python scripts/moves.py record draft.json observation.json --output checkpoints.json
+python scripts/moves.py observation-draft draft.json --output observation-2.json
+```
+
+Times are cumulative, so the second checkpoint repeats the totals so far,
+never just the new interval. Set these fields in `observation-2.json`:
+
+```json
+{
+  "elapsed_hours": 48,
+  "active_minutes": 20,
+  "observed_value": 2,
+  "notes": "Synthetic second checkpoint only, no experiment occurred."
+}
+```
+
+```sh
 python scripts/moves.py record draft.json observation-2.json \
     --history checkpoints.json --output checkpoints-2.json
 python scripts/moves.py timeline draft.json checkpoints-2.json \
     --format csv --output checkpoints.csv
 python scripts/moves.py limits draft.json checkpoints-2.json --output limits.json
 ```
+
+The second checkpoint reaches both the declared active-time budget and the
+experiment window, so the history ends in `stop_and_review` even though the
+synthetic target is met.
 
 Every row in `checkpoints.csv` keeps its plan digest, selected move,
 cumulative and interval effort, metric, baseline, target, observed value,
