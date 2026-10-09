@@ -193,14 +193,20 @@ files and commands that ship in this repository.
 
 ## Validate and package
 
-From the repository root:
+From the repository root, run the same check set as CI:
 
 ```sh
-python scripts/validate.py
-python scripts/validate_plan.py examples/example-plan.json
-python scripts/validate_plan.py examples/bounded-plan.json --json
-python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json
-python -m unittest discover -s tests -v
+python scripts/check.py
+```
+
+It runs, in order and stopping at the first failure: `scripts/validate.py`,
+both example plan validators, the synthetic outcome replay,
+`python -m unittest discover -s tests -v`, the offline eval fixture runner
+`evals/runner.py`, and a package build into a temporary directory.
+`python scripts/check.py --list` prints the exact commands. To build a package
+you keep, run:
+
+```sh
 python scripts/package.py --output dist
 ```
 
@@ -238,6 +244,7 @@ Ordinary tests remain offline.
 | [Plan validator](scripts/validate_plan.py) | Structural validation and limited lexical screening |
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
+| [Check runner](scripts/check.py) | The CI check set in one command |
 | [Security](SECURITY.md) | Security scope and reporting guidance |
 | [Contributing](CONTRIBUTING.md) | Contribution and verification rules |
 | [Provenance](PROVENANCE.md) | Origin and independence disclosures |

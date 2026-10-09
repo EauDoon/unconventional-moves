@@ -11,6 +11,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Added
 
+- Add `scripts/check.py`, which runs the CI check set in order (repository validation, both example plan validators, the outcome replay, the unit tests, the eval fixture runner, and a package build into a temporary directory) and stops at the first failure. CI now runs this one script, and README, CONTRIBUTING, and the eval README point to it; `--list` prints the commands.
 - Check in `scripts/validate.py` that this changelog keeps `[Unreleased]` first, lists dated releases from newest to oldest, and names `VERSION` as the newest release.
 - Add `unpack-handoff` to verify a handoff before restoring its exact plan and complete supplied checkpoint history into a new directory, with persistent stop decisions and pending human review.
 - Include a runnable synthetic recovery and revision walkthrough, clean extracted-package coverage, and the documented version-aware CLI shim in the package.

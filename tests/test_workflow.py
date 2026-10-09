@@ -802,6 +802,34 @@ class FullWorkflowTests(unittest.TestCase):
                     self.assertEqual(rejected, not low <= count <= high)
 
 
+class CheckRunnerTests(unittest.TestCase):
+    """Never run the full check.py here: its unit-test step would recurse."""
+
+    def test_list_prints_the_ci_check_set_in_order(self):
+        from check import CHECKS, describe
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/check.py"), "--list"],
+                                cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        listed = result.stdout.splitlines()
+        self.assertEqual(listed, [describe(check) for check in CHECKS])
+        for expected in ("python scripts/validate.py",
+                         "python scripts/validate_plan.py examples/example-plan.json",
+                         "python scripts/validate_plan.py examples/bounded-plan.json --json",
+                         "python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json",
+                         "python -m unittest discover -s tests -v",
+                         "python evals/runner.py"):
+            self.assertIn(expected, listed)
+        self.assertTrue(listed[-1].startswith("python scripts/package.py --output "))
+
+    def test_contributor_docs_and_ci_use_the_check_runner(self):
+        for name in ("README.md", "CONTRIBUTING.md"):
+            with self.subTest(file=name):
+                self.assertIn("python scripts/check.py", (ROOT / name).read_text(encoding="utf-8"))
+        workflow = ROOT / ".github/workflows/ci.yml"
+        if workflow.is_file():
+            self.assertIn("python scripts/check.py", workflow.read_text(encoding="utf-8"))
+
+
 class VersionGateTests(unittest.TestCase):
     """The shim exists to refuse a v0.1 plan at the CLI boundary, not later."""
 

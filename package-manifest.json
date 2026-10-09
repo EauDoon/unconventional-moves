@@ -50,6 +50,7 @@
   "schemas/moves-v0.2.schema.json",
   "schemas/moves.schema.json",
   "schemas/outcome.schema.json",
+  "scripts/check.py",
   "scripts/moves.py",
   "scripts/moves_cli.py",
   "scripts/package.py",

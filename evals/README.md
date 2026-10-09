@@ -10,7 +10,14 @@ It neither runs a model nor establishes that any response is useful or safe.
 
 ```sh
 python -m unittest discover -s tests -p test_evals.py -v
+python evals/runner.py
 ```
+
+The first command checks fixture integrity and the recorded probe; the second
+checks every case file against the rubric gates and the declared suite, and
+exits 0, 1 for a failing case, or 2 for a wrong suite shape. CI runs both
+through `python scripts/check.py`, which also runs the rest of the repository
+check set.
 
 Use an available Python 3 interpreter (`python3` or `py` when appropriate).
 No packages, network, API keys, paid resources, or real experiments are needed.
