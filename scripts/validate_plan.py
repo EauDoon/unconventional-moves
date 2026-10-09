@@ -13,6 +13,11 @@ from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 
+try:
+    from .versioning import VersionAction
+except ImportError:
+    from versioning import VersionAction
+
 MOVE_FIELDS = [
     "id",
     "title",
@@ -248,6 +253,7 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     parser.add_argument("plan", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()

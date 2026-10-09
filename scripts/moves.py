@@ -19,8 +19,10 @@ from urllib.parse import urlsplit
 
 try:
     from .validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from .versioning import VersionAction
 except ImportError:
     from validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from versioning import VersionAction
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -731,6 +733,7 @@ def _read_input(reader, path: Path):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     commands = parser.add_subparsers(dest="command", required=True)
     debrief = commands.add_parser("debrief", help="Render observations, stop history, and learning questions as inert Markdown")
     debrief.add_argument("plan", type=Path)

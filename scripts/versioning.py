@@ -8,7 +8,9 @@ from newest to oldest. The newest release must equal VERSION.
 
 from __future__ import annotations
 
+import argparse
 import re
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -35,6 +37,25 @@ def read_version(root: Path = ROOT) -> str:
             f"VERSION must contain a semantic X.Y.Z version of at most {MAX_VERSION_LENGTH} characters"
         )
     return version
+
+
+class VersionAction(argparse.Action):
+    """A --version option that reads VERSION only when it is used."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS,
+                 help="print the package version and exit"):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            version = read_version(ROOT)
+        except (OSError, ValueError):
+            print("FAIL VERSION is missing or invalid", file=sys.stderr)
+            parser.exit(1)
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
+        print(f"unconventional-moves {version}")
+        parser.exit(0)
 
 
 def _version_key(version: str) -> tuple[int, ...]:

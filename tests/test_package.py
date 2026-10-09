@@ -103,9 +103,14 @@ class PackageTests(unittest.TestCase):
                          ["evals/runner.py"],
                          ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
                           "--output-dir", str(root / "shim-restored")],
-                         ["scripts/moves.py", "render", "examples/example-plan.json"]):
+                         ["scripts/moves.py", "render", "examples/example-plan.json"],
+                         ["scripts/moves.py", "--version"],
+                         ["scripts/moves_cli.py", "--version"]):
                 result = subprocess.run([sys.executable, *args], cwd=package, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if args[-1] == "--version":
+                    # An extracted archive has no git metadata; VERSION identifies it.
+                    self.assertEqual(result.stdout, f"unconventional-moves {version_for(ROOT)}\n")
             # Neither replay nor recovery may overwrite an earlier result.
             original = (replay / "replay-summary.json").read_bytes()
             result = subprocess.run([sys.executable, str(package / "examples/replay-handoff.py"),
@@ -335,6 +340,52 @@ class PackageTests(unittest.TestCase):
 
             self.assertNotEqual(failed.returncode, 0)
             self.assertEqual((archive.read_bytes(), checksum.read_bytes()), previous)
+
+
+class VersionFlagTests(unittest.TestCase):
+    ENTRY_POINTS = (
+        ("scripts/moves.py",),
+        ("-m", "scripts.moves"),
+        ("scripts/moves_cli.py",),
+        ("scripts/validate_plan.py",),
+        ("scripts/validate.py",),
+        ("scripts/package.py",),
+        ("scripts/check.py",),
+    )
+    ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def test_every_entry_point_reports_the_version_file(self):
+        expected = f"unconventional-moves {version_for(ROOT)}\n".encode("ascii")
+        for entry in self.ENTRY_POINTS:
+            with self.subTest(entry=entry):
+                result = subprocess.run([sys.executable, *entry, "--version"], cwd=ROOT,
+                                        env=self.ENV, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+                self.assertEqual(result.stderr, b"")
+
+    def test_package_version_flag_creates_no_output_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "dist"
+            result = subprocess.run([sys.executable, str(ROOT / "scripts/package.py"),
+                                     "--output", str(output), "--version"],
+                                    env=self.ENV, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(output.exists())
+
+    def test_invalid_version_file_fails_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "project"
+            (root / "scripts").mkdir(parents=True)
+            for name in ("package.py", "versioning.py"):
+                shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
+            (root / "VERSION").write_text("v1.2\n", encoding="utf-8")
+            result = subprocess.run([sys.executable, str(root / "scripts/package.py"), "--version"],
+                                    env=self.ENV, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("FAIL VERSION is missing or invalid", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

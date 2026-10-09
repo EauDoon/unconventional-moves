@@ -12,9 +12,9 @@ from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 try:
-    from .versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, read_version
+    from .versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, VersionAction, read_version
 except ImportError:
-    from versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, read_version
+    from versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, VersionAction, read_version
 
 __all__ = ["MAX_VERSION_LENGTH", "VERSION_PATTERN", "files_for", "main", "version_for"]
 
@@ -46,6 +46,7 @@ def files_for(root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     parser.add_argument("--output", type=Path, default=Path("dist"))
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):

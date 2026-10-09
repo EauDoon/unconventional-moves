@@ -112,7 +112,9 @@ safety boilerplate.
 The Python CLI authors and validates plans, renders review reports, and records
 observations. It makes no model calls and executes no real-world experiments.
 Use Python 3.11 to 3.14 (the CI matrix versions); `python` below means your verified interpreter (for
-example, `py` on Windows or `python3` on Unix).
+example, `py` on Windows or `python3` on Unix). Each script accepts `--version`;
+`python scripts/moves.py --version` prints the package version from `VERSION`,
+which identifies an extracted archive that has no git history.
 
 From a fresh copy of the repository or an extracted package, run:
 

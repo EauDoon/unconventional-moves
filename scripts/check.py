@@ -15,6 +15,11 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+try:
+    from .versioning import VersionAction
+except ImportError:
+    from versioning import VersionAction
+
 ROOT = Path(__file__).resolve().parents[1]
 DIST = "<temporary directory>/dist"
 
@@ -36,6 +41,7 @@ def describe(check: tuple[str, ...]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     parser.add_argument("--list", action="store_true", help="print the commands without running them")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):

@@ -3,12 +3,14 @@
 
 Thin wrapper that reads a plan's contract_version and forwards every
 argument to moves.main() unchanged. The shim exists so a v0.2-only
-command (card, outcome, select, observation-draft, handoff) refuses a
-v0.1 input with a clear message at the CLI boundary, instead of letting
-moves.py raise a less specific ValueError after parsing the plan.
+command (card, debrief, handoff, limits, observation-draft, outcome,
+record, screen, select, table, timeline) refuses a v0.1 input with a
+clear message at the CLI boundary, instead of letting moves.py raise a
+less specific ValueError after parsing the plan.
 
 The underlying moves.py stays untouched and remains the single source of
-for behavior. This shim only inspects the input file and applies a gate.
+truth for behavior. This shim only inspects the input file and applies a
+gate. Top-level options such as --version pass through to moves.py.
 
 Rules:
 - plan-required commands, using the first positional plan path:

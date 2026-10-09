@@ -847,6 +847,14 @@ class VersionGateTests(unittest.TestCase):
                 self.assertIn("requires a v0.2 plan", result.stderr)
                 self.assertNotIn("experiment workflow requires", result.stderr)
 
+    def test_docstring_lists_every_gated_command(self):
+        import moves_cli
+        listed = moves_cli.__doc__.split("Rules:")[0]
+        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS):
+            with self.subTest(command=command):
+                self.assertRegex(listed, r"(?<![\w-])" + command + r"(?![\w-])")
+        self.assertIn("single source of\ntruth for behavior", listed)
+
     def test_shared_commands_still_accept_a_v01_plan(self):
         from moves_cli import SHARED_COMMANDS
         v01 = str(ROOT / "examples/example-plan.json")
