@@ -9,6 +9,10 @@ The root `VERSION` file is the single source of the package version, and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
+This is the first release since 0.2.0. Archives built from `main` between 2026-09-09 and this release were named 0.2.0 but contained later changes. A `0.3.0` heading added to this file earlier was never released; its entries are part of this release.
+
 ### Added
 
 - Add a tag-triggered release workflow. For a `vX.Y.Z` tag it checks that the tag matches `VERSION` and a dated CHANGELOG section (`scripts/versioning.py --check-tag`), reruns the check set, builds the archive and checksum, records a GitHub build provenance attestation for the archive, and publishes a GitHub Release whose notes are that CHANGELOG section (`--notes`). CONTRIBUTING documents the release steps, and tests keep workflow expressions out of run scripts.
@@ -91,6 +95,7 @@ The root `VERSION` file is the single source of the package version, and
 - Added high-stakes Sources guidance, JSON schema mode, and a copy-ready worksheet.
 - Added deterministic packaging, checksums, CI, and installation guidance.
 
-[Unreleased]: https://github.com/EauDoon/unconventional-moves/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/EauDoon/unconventional-moves/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/EauDoon/unconventional-moves/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EauDoon/unconventional-moves/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EauDoon/unconventional-moves/releases/tag/v0.1.0
