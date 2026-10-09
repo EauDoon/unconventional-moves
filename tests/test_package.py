@@ -183,6 +183,31 @@ class PackageTests(unittest.TestCase):
                                      sorted(prefix + path.relative_to(ROOT).as_posix() for path in files_for(ROOT)))
             self.assertEqual(*archives)
 
+    def test_packaged_files_use_lf_line_endings(self):
+        # .gitattributes pins LF, so a Windows checkout with autocrlf packages
+        # the same file contents as a Unix checkout.
+        for path in files_for(ROOT):
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                self.assertNotIn(b"\r", path.read_bytes())
+
+    def test_manifest_covers_every_tracked_file(self):
+        if not (ROOT / ".git").exists():
+            self.skipTest("not a git checkout")
+        try:
+            listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"],
+                                    capture_output=True, check=True)
+        except (OSError, subprocess.CalledProcessError):
+            self.skipTest("git ls-files is unavailable")
+        tracked = {name for name in listed.stdout.decode("utf-8").split("\0") if name}
+        manifest = set(json.loads((ROOT / "package-manifest.json").read_text(encoding="utf-8")))
+        self.assertLessEqual(manifest, tracked, "manifest names a file git does not track")
+        # Repository-only files: workflow and community templates, audit
+        # records, and git configuration. Everything else must ship.
+        unpackaged = {name for name in tracked - manifest
+                      if not name.startswith((".github/", "audits/"))
+                      and name not in {".gitignore", ".gitattributes"}}
+        self.assertEqual(unpackaged, set(), "tracked file missing from package-manifest.json")
+
     def test_manifest_rejects_nonportable_names_and_symlink_ancestors(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

@@ -208,8 +208,10 @@ leaves previous output untouched and does not publish a mismatched pair. Choose 
 new path for each build; do not delete an earlier release to make a rerun succeed.
 The builder uses only the standard
 library and produces a versioned ZIP and SHA-256 checksum. Compare two clean
-builds under the same environment to check reproducibility. Cross-platform
-byte identity requires testing, not an assumption.
+builds under the same environment to check reproducibility. `.gitattributes`
+pins LF line endings, so Windows and Unix checkouts package the same file
+contents; compressed archive bytes can still differ between Python or zlib
+builds, so cross-platform byte identity requires testing, not an assumption.
 
 Extract the archive into a fresh directory, verify its checksum against the
 builder's checksum file, then copy the extracted `skill/unconventional-moves`

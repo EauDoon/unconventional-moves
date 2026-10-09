@@ -23,6 +23,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Changed
 
+- Pin LF line endings in `.gitattributes`, so a Windows checkout with Git's default `autocrlf` packages the same file contents as a Unix checkout, and test that every packaged file is LF and every tracked file is either packaged or deliberately repository-only.
 - Ship the eval runner and its per-case fixtures in the package so the documented fixture check can run from an extracted archive.
 - Align revision diffs with digest representations and flag changed mechanisms, causal explanations, and tests for review.
 - Strengthen causal diversity, contextual framing, experiment measurement, and one defensible first action without expanding the plan contracts.
