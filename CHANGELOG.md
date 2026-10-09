@@ -23,6 +23,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Changed
 
+- Run CI on Python 3.11, 3.12, 3.13, and 3.14 on Ubuntu and Windows with Node 24 releases of `actions/checkout` and `actions/setup-python` pinned to full commit SHAs, checkout credentials not persisted, `fail-fast` off, a 20 minute timeout, and superseded pull request runs cancelled. Pushes run CI only on `main`, so a pull request branch is no longer checked twice. Dependabot proposes weekly grouped action updates, and a test requires every workflow action to be pinned to a full commit SHA with a version comment.
 - Check `screen` ceilings, `sources --max-age-days`, and `sources --as-of` when arguments are parsed, so an out-of-range number, a non-ASCII digit, or an impossible date exits 2 as the documented exit-code contract says, instead of 1 after reading the plan. File errors now say whether the input could not be read or the output could not be created.
 - Pin LF line endings in `.gitattributes`, so a Windows checkout with Git's default `autocrlf` packages the same file contents as a Unix checkout, and test that every packaged file is LF and every tracked file is either packaged or deliberately repository-only.
 - Ship the eval runner and its per-case fixtures in the package so the documented fixture check can run from an extracted archive.

@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -128,6 +129,25 @@ class Utf8OutputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr.decode("utf-8", "replace"))
             self.assertNotIn(b"Traceback", result.stderr)
             self.assertIn("caf\u00e9.md", result.stdout.decode("utf-8"))
+
+
+class WorkflowPinTests(unittest.TestCase):
+    def test_workflow_actions_are_pinned_to_full_commit_shas(self):
+        workflows = ROOT / ".github" / "workflows"
+        if not workflows.is_dir():
+            self.skipTest("workflows are not shipped in the package")
+        # A full commit SHA cannot be moved like a tag; the version comment
+        # lets Dependabot and reviewers read which release it is.
+        pinned = re.compile(r"\s*(?:-\s+)?uses:\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+\s*")
+        uses = []
+        for path in sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")]):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if re.match(r"\s*(?:-\s+)?uses:", line):
+                    uses.append((path.name, number, line))
+        self.assertTrue(uses, "no workflow step uses an action")
+        for name, number, line in uses:
+            with self.subTest(workflow=name, line=number):
+                self.assertIsNotNone(pinned.fullmatch(line), line)
 
 
 class ValidateTests(unittest.TestCase):

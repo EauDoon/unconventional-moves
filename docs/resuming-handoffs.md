@@ -1,6 +1,6 @@
 # Resume review from an exported handoff
 
-Use Python 3.11 or 3.12 from the repository or an extracted package. All commands
+Use Python 3.11 to 3.14 from the repository or an extracted package. All commands
 are offline; none executes an experiment. A handoff has enough source data to
 restore an editable plan and its supplied observations without copying fields
 by hand. Copying only the latest observation can hide earlier stops.

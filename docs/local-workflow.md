@@ -1,6 +1,6 @@
 # Local plan workflow
 
-Use Python 3.11 or 3.12. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
+Use Python 3.11 to 3.14. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
 
 Successful `moves.py` and `moves_cli.py` output uses UTF-8 with LF newlines,
 including redirected stdout, independently of the process locale or

@@ -111,7 +111,7 @@ safety boilerplate.
 
 The Python CLI authors and validates plans, renders review reports, and records
 observations. It makes no model calls and executes no real-world experiments.
-Use Python 3.11 or 3.12 (the CI matrix versions); `python` below means your verified interpreter (for
+Use Python 3.11 to 3.14 (the CI matrix versions); `python` below means your verified interpreter (for
 example, `py` on Windows or `python3` on Unix).
 
 From a fresh copy of the repository or an extracted package, run:
