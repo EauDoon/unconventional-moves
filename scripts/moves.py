@@ -228,21 +228,27 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
 
 
-def _decimal_precision(numbers: list[Decimal]) -> int:
-    """Enough significant digits to keep the parsed values exact.
+def _exact_precision(*numbers: Decimal) -> int:
+    """Significant digits that keep sums, differences, and products by 60 exact.
 
-    A fixed precision of 28 makes 10**500 - 10**1000 identical to 0 - 10**1000,
-    so the progress fraction becomes 1 while the exact target comparison says
-    the target was not met.
+    Each finite operand occupies digit positions from its exponent (lowest) to
+    exponent + digits - 1 (highest). The result needs the combined range of all
+    operands, not the widest single operand: with 28 digits, 2e-5 - 1e30 rounds
+    to -1e30, so a progress fraction displays 1 while the exact target
+    comparison says the target was not met. Four extra digits cover a carry and
+    the two digits of a factor of 60, and keep a quotient that is not exactly 1
+    distinguishable from 1.
     """
-    precision = 28
+    highs, lows = [], []
     for number in numbers:
-        _sign, digits, exponent = number.as_tuple()
-        if not isinstance(exponent, int):
+        if not number.is_finite():
             continue
-        span = len(digits) + (exponent if exponent >= 0 else -exponent)
-        precision = max(precision, span)
-    return precision
+        _sign, digits, exponent = number.as_tuple()
+        highs.append(exponent + len(digits) - 1)
+        lows.append(exponent)
+    if not highs:
+        return 28
+    return max(28, max(highs) - min(lows) + 4)
 
 
 def measurement_context(experiment: dict, observed: int | float | None) -> dict:
@@ -252,7 +258,7 @@ def measurement_context(experiment: dict, observed: int | float | None) -> dict:
         baseline, target, value = (Decimal(str(number)) for number in
                                    (experiment["baseline"], experiment["target"], observed))
         with localcontext() as context:
-            context.prec = _decimal_precision([baseline, target, value])
+            context.prec = _exact_precision(baseline, target, value)
             result["change_from_baseline"] = str(value - baseline)
             result["progress_fraction"] = str((value - baseline) / (target - baseline))
     return result
@@ -514,16 +520,22 @@ def review_timeline(plan: dict, observations: object) -> dict:
         hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
         if hours <= previous_hours or minutes < previous_minutes:
             raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
-        if index > 1 and Decimal(str(minutes)) - Decimal(str(previous_minutes)) > (Decimal(str(hours)) - Decimal(str(previous_hours))) * 60:
-            raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
+        elapsed, active = Decimal(str(hours)), Decimal(str(minutes))
+        # The first interval starts at zero; later ones at the previous checkpoint.
+        start_hours, start_minutes = Decimal(str(max(0, previous_hours))), Decimal(str(max(0, previous_minutes)))
+        with localcontext() as context:
+            context.prec = _exact_precision(elapsed, active, start_hours, start_minutes, Decimal(60))
+            interval_hours = elapsed - start_hours
+            interval_minutes = active - start_minutes
+            if index > 1 and interval_minutes > interval_hours * 60:
+                raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
+            fraction = str(interval_minutes / (interval_hours * 60)) if interval_hours else None
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
             first_stop = index
-        interval_hours = Decimal(str(hours)) - Decimal(str(max(0, previous_hours)))
-        interval_minutes = Decimal(str(minutes)) - Decimal(str(max(0, previous_minutes)))
         checkpoints.append({"checkpoint": index, "elapsed_hours": hours, "active_minutes": minutes,
                             "interval_hours": str(interval_hours), "interval_active_minutes": str(interval_minutes),
-                            "interval_activity_fraction": str(interval_minutes / (interval_hours * 60)) if interval_hours else None,
+                            "interval_activity_fraction": fraction,
                             "review": review, "after_stop": first_stop is not None and index > first_stop})
         previous_hours, previous_minutes = hours, minutes
     measured = [row for row in checkpoints if row["review"]["target_met"] is not None]
@@ -632,9 +644,12 @@ def review_limits(plan: dict, observations: object) -> dict:
     bounds = {}
     for reported, declared in (("elapsed_hours", "duration_hours"), ("active_minutes", "max_minutes")):
         consumed, maximum = Decimal(str(latest[reported])), Decimal(str(experiment[declared]))
+        with localcontext() as context:
+            context.prec = _exact_precision(consumed, maximum)
+            remaining = str(max(Decimal(0), maximum - consumed))
+            overrun = str(max(Decimal(0), consumed - maximum))
         bounds[reported] = {"declared_limit": experiment[declared], "reported": latest[reported],
-                            "remaining": str(max(Decimal(0), maximum - consumed)),
-                            "overrun": str(max(Decimal(0), consumed - maximum)),
+                            "remaining": remaining, "overrun": overrun,
                             "limit_reached": consumed >= maximum}
     return {"plan_sha256": timeline["plan_sha256"], "move_id": timeline["move_id"], "bounds": bounds,
             "decision": timeline["decision"], "reasons": timeline["reasons"],

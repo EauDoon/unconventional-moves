@@ -152,7 +152,7 @@ python scripts/moves.py timeline draft.json checkpoints.json --output timeline-r
 
 `checkpoints.json` is an array of 1 to 100 completed outcome records in increasing elapsed-hour order. Active minutes are cumulative and cannot decrease. Each record must match the current digest and move. Any earlier stop reason remains in the final decision, even if a later record clears its flag. Entries recorded after the first stop are identified for human review. The report does not schedule, combine independent trials, or authorize continued activity.
 
-Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Even a small declared overrun of that interval is rejected.
+Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Precision spans the combined magnitude range of the checkpoint values, so even a declared overrun far smaller than the interval is rejected rather than rounded away.
 
 The shared outcome validator also compares cumulative elapsed time in decimal, accepting exactly 1.8 active minutes at 0.03 elapsed hours across outcome, record, timeline, and handoff commands. It rejects actual excess instead of adding a tolerance that could hide it.
 
@@ -189,7 +189,7 @@ An explicitly supplied history must be a JSON array, including `[]` for an inten
 
 ## Measurement interpretation
 
-Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings (or `null` without a measurement). Precision follows the parsed operands, with at least 28 significant digits, so extreme finite inputs stay finite and a displayed fraction of 1 means the observed value is the numeric target. A negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
+Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings (or `null` without a measurement). Precision spans the combined magnitude range of the baseline, target, and observed value (from the largest leading digit to the smallest trailing digit), with at least 28 significant digits, so differences stay exact, extreme finite inputs stay finite, and a displayed fraction of 1 means the observed value is the numeric target. Remaining and overrun bounds use the same rule. A negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
 
 ## Observation drafts
 

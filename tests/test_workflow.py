@@ -526,6 +526,29 @@ class SelectionTests(unittest.TestCase):
         self.assertLess(Decimal(measurement["progress_fraction"]), Decimal(1))
         self.assertNotIn("Infinity", json.dumps(review, allow_nan=False))
 
+    def test_progress_stays_exact_when_operand_magnitudes_differ(self):
+        # Compare Decimal values: an inexact quotient may carry trailing zeros.
+        from decimal import Decimal
+        from moves import evaluate_outcome, plan_digest
+        for baseline, target, direction, observed, expected_met in (
+                (1e30, 1e-5, "decrease", 2e-5, False),
+                (-1e40, 1e-12, "increase", 2e-12, True)):
+            with self.subTest(baseline=baseline, target=target):
+                plan = bounded_example()
+                plan["moves"][0]["experiment"].update(baseline=baseline, target=target, direction=direction)
+                self.assertEqual(validate_plan_data(plan), [])
+                observation = OutcomeTests().observation(plan)
+                observation.update(observed_value=observed, plan_sha256=plan_digest(plan))
+                review = evaluate_outcome(plan, observation)
+                self.assertIs(review["target_met"], expected_met)
+                progress = Decimal(review["measurement"]["progress_fraction"])
+                # A fraction of exactly 1 would claim the observed value is the target.
+                self.assertNotEqual(progress, 1)
+                self.assertEqual(progress > 1, expected_met)
+                if direction == "decrease":
+                    self.assertEqual(Decimal(review["measurement"]["change_from_baseline"]),
+                                     Decimal("-999999999999999999999999999999.99998"))
+
     def test_observation_draft_requires_completion_and_matches_selection(self):
         from moves import observation_draft, evaluate_outcome, select_plan
         plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")

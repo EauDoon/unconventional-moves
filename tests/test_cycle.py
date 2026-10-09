@@ -6,7 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import test_workflow as fixtures
 import moves
@@ -303,6 +303,19 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertEqual(len(moves.review_timeline(self.plan, [self.first, self.second])["checkpoints"]), 2)
         with self.assertRaises(ValueError):
             moves.review_timeline(self.plan, [self.first, {**self.second, "active_minutes": 8.000001}])
+
+    def test_interval_and_bound_arithmetic_stay_exact_across_magnitudes(self):
+        tiny = {**self.first, "elapsed_hours": 1e-300, "active_minutes": 0}
+        # The second interval is 6e-299 minutes shorter than 60 minutes.
+        with self.assertRaisesRegex(ValueError, "checkpoint active-time increase exceeds the elapsed interval"):
+            moves.review_timeline(self.plan, [tiny, {**self.first, "elapsed_hours": 1, "active_minutes": 60}])
+        rows = moves.review_timeline(self.plan, [tiny, {**self.first, "elapsed_hours": 1, "active_minutes": 59}])["checkpoints"]
+        remaining = moves.review_limits(self.plan, [tiny])["bounds"]["elapsed_hours"]["remaining"]
+        with localcontext() as context:
+            context.prec = 400
+            self.assertEqual(Decimal(rows[1]["interval_hours"]), Decimal(1) - Decimal("1e-300"))
+            self.assertEqual(Decimal(remaining), Decimal(48) - Decimal("1e-300"))
+        self.assertLess(Decimal(rows[1]["interval_activity_fraction"]), 1)
 
     def test_activity_ledger_distinguishes_idle_and_full_intervals(self):
         observations = [self.first, self.second, {**self.second, "elapsed_hours": 1}]

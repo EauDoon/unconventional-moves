@@ -33,6 +33,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Fixed
 
+- Size decimal precision from the combined magnitude range of all operands in progress, checkpoint interval, and remaining bound arithmetic, so a baseline of 1e30 with an observed 2e-5 no longer displays a progress fraction of 1 for a missed target, and an interval overrun of 6e-299 minutes is rejected instead of rounded away.
 - Write UTF-8 standard output from `validate_plan.py`, `validate.py`, and the eval runner, so a valid plan under a path the console encoding cannot represent passes instead of exiting 1 with `UnicodeEncodeError`.
 - Reject control and format characters in repository link paths before resolving them, so the link check fails closed on every Python version instead of relying on `Path.resolve()` raising for NUL, which Python 3.13 and 3.14 on Windows no longer do.
 - Return exit code 2 when the eval rubric file is missing, instead of raising FileNotFoundError.
