@@ -707,6 +707,48 @@ class FullWorkflowTests(unittest.TestCase):
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertNotIn("secret_marker", result.stderr)
 
+    def test_invalid_argument_values_exit_2_at_parse_time(self):
+        plan = ROOT / "examples/bounded-plan.json"
+        screen = ("screen", plan, "--exposure", "self_only")
+        for args in (
+            (*screen, "--max-minutes", "0"),
+            (*screen, "--max-minutes", "2881"),
+            (*screen, "--max-minutes", "\uff15"),
+            (*screen, "--max-minutes", "20", "--max-start-hours", "99"),
+            (*screen, "--max-minutes", "20", "--max-duration-hours", "0"),
+            ("sources", plan, "--as-of", "2026-02-30", "--max-age-days", "30"),
+            ("sources", plan, "--as-of", "\uff12\uff10\uff12\uff16-09-10", "--max-age-days", "30"),
+            ("sources", plan, "--as-of", "2026-09-10", "--max-age-days", "-1"),
+        ):
+            with self.subTest(args=args[2:]):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("usage:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+        # Boundary values remain accepted.
+        for args in ((*screen, "--max-minutes", "2880", "--max-start-hours", "0", "--max-duration-hours", "48"),
+                     ("sources", plan, "--as-of", "2026-09-10", "--max-age-days", "0")):
+            with self.subTest(args=args[2:]):
+                self.assertEqual(self.run_cli(*args).returncode, 0)
+
+    def test_file_errors_name_the_input_or_the_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            result = self.run_cli("review", ROOT / "examples/bounded-plan.json",
+                                  "--output", temp / "missing-directory" / "review.json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL output could not be created", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            result = self.run_cli("review", temp / "missing.json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL input file is unavailable", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            existing = temp / "existing.json"
+            existing.write_text("{}", encoding="utf-8")
+            result = self.run_cli("review", ROOT / "examples/bounded-plan.json", "--output", existing)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL output already exists", result.stderr)
+
     def test_large_integers_do_not_overflow_and_decrease_works(self):
         from moves import evaluate_outcome, plan_digest
         plan = bounded_example()

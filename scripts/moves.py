@@ -460,9 +460,29 @@ def screen_moves(plan: dict, max_minutes: int, exposure: str,
 
 
 def iso_date(value: str) -> date:
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+    # ASCII digits only: in a str pattern, \d also matches other Unicode digits.
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
         raise ValueError("date must use YYYY-MM-DD")
     return date.fromisoformat(value)
+
+
+def bounded_int(low: int, high: int):
+    """argparse type for an ASCII integer within inclusive bounds (exit code 2)."""
+    def parse(value: str) -> int:
+        if re.fullmatch(r"[+-]?[0-9]+", value) is None or not low <= int(value) <= high:
+            raise argparse.ArgumentTypeError(f"must be an integer from {low} to {high}")
+        return int(value)
+    parse.__name__ = "integer"
+    return parse
+
+
+def iso_date_argument(value: str) -> str:
+    """argparse type for a real YYYY-MM-DD date, kept as the original string."""
+    try:
+        iso_date(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a real date in YYYY-MM-DD form") from None
+    return value
 
 
 def _citation_url_key(value: str) -> str:
@@ -697,6 +717,18 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     return revised
 
 
+class InputUnavailable(Exception):
+    """An input file could not be opened, read, or decoded as UTF-8."""
+
+
+def _read_input(reader, path: Path):
+    """Separate input failures from output failures in CLI diagnostics."""
+    try:
+        return reader(path)
+    except (OSError, UnicodeError) as exc:
+        raise InputUnavailable from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -735,15 +767,15 @@ def main(argv: list[str] | None = None) -> int:
     limits.add_argument("--output", type=Path)
     sources = commands.add_parser("sources", help="Audit declared source dates without network access")
     sources.add_argument("plan", type=Path)
-    sources.add_argument("--as-of", required=True)
-    sources.add_argument("--max-age-days", type=int, required=True)
+    sources.add_argument("--as-of", type=iso_date_argument, required=True)
+    sources.add_argument("--max-age-days", type=bounded_int(0, 36500), required=True)
     sources.add_argument("--output", type=Path)
     screen = commands.add_parser("screen", help="Shortlist declared bounds without ranking or selecting moves")
     screen.add_argument("plan", type=Path)
-    screen.add_argument("--max-minutes", type=int, required=True)
+    screen.add_argument("--max-minutes", type=bounded_int(1, 2880), required=True)
     screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
-    screen.add_argument("--max-start-hours", type=int)
-    screen.add_argument("--max-duration-hours", type=int)
+    screen.add_argument("--max-start-hours", type=bounded_int(0, 48))
+    screen.add_argument("--max-duration-hours", type=bounded_int(1, 48))
     screen.add_argument("--output", type=Path)
     handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
     handoff.add_argument("plan", type=Path)
@@ -777,73 +809,87 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("after", type=Path)
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+
+    def plan_input(path: Path) -> dict:
+        return _read_input(read_plan, path)
+
+    def json_input(path: Path) -> object:
+        return _read_input(read_json_file, path)
+
     try:
         if args.command == "debrief":
-            emit(render_debrief(read_plan(args.plan), read_json_file(args.observations)), args.output)
+            emit(render_debrief(plan_input(args.plan), json_input(args.observations)), args.output)
         elif args.command == "table":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
         elif args.command == "record":
-            result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
-                                       read_json_file(args.history) if args.history else [])
+            result = append_checkpoint(plan_input(args.plan), json_input(args.observation),
+                                       json_input(args.history) if args.history else [])
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "init":
-            plan = read_plan(ROOT / "examples/bounded-plan.json")
+            plan = plan_input(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             if args.timeline:
-                result = timeline_handoff(plan, read_json_file(args.timeline))
+                result = timeline_handoff(plan, json_input(args.timeline))
             else:
-                observation = read_json_file(args.observation) if args.observation else None
+                observation = json_input(args.observation) if args.observation else None
                 if args.observation and not isinstance(observation, dict):
                     raise ValueError("supplied observation must be an object; omit --observation for a plan-only handoff")
                 result = handoff_bundle(plan, observation)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
-            emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
+            emit(json.dumps(verify_handoff(json_input(args.bundle)), indent=2) + "\n", args.output)
         elif args.command == "unpack-handoff":
-            result = unpack_handoff(read_json_file(args.bundle), args.output_dir)
+            result = unpack_handoff(json_input(args.bundle), args.output_dir)
             emit(json.dumps(result, indent=2) + "\n", None)
         elif args.command == "screen":
-            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure,
+            result = screen_moves(plan_input(args.plan), args.max_minutes, args.exposure,
                                   args.max_start_hours, args.max_duration_hours)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
-            result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
+            result = audit_sources(plan_input(args.plan), args.as_of, args.max_age_days)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "limits":
-            result = review_limits(read_plan(args.plan), read_json_file(args.observations))
+            result = review_limits(plan_input(args.plan), json_input(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
-            plan, observations = read_plan(args.plan), read_json_file(args.observations)
+            plan, observations = plan_input(args.plan), json_input(args.observations)
             content = timeline_csv(plan, observations) if args.format == "csv" else json.dumps(
                 review_timeline(plan, observations), indent=2) + "\n"
             emit(content, args.output)
         elif args.command == "observation-draft":
-            emit(json.dumps(observation_draft(read_plan(args.plan)), indent=2) + "\n", args.output)
+            emit(json.dumps(observation_draft(plan_input(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "select":
-            result = select_plan(read_plan(args.plan), args.move_id, args.reason, args.first_step)
+            result = select_plan(plan_input(args.plan), args.move_id, args.reason, args.first_step)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "review":
-            emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
+            emit(json.dumps(review_plan(plan_input(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "render":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(render_html(plan) if args.format == "html" else render_plan(plan), args.output)
         elif args.command == "card":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(render_card(plan) if args.format == "markdown" else json.dumps(experiment_card(plan), indent=2) + "\n", args.output)
         elif args.command == "outcome":
-            result = evaluate_outcome(read_plan(args.plan), read_json_file(args.observation))
+            result = evaluate_outcome(plan_input(args.plan), json_input(args.observation))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "compare":
-            result = compare_plans(read_plan(args.before), read_plan(args.after))
+            result = compare_plans(plan_input(args.before), plan_input(args.after))
             emit(json.dumps(result, indent=2) + "\n", args.output)
+    except InputUnavailable:
+        print("FAIL input file is unavailable or not UTF-8", file=sys.stderr)
+        return 1
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)
         return 1
-    except (OSError, UnicodeError):
-        print("FAIL input or output file is unavailable or not UTF-8", file=sys.stderr)
+    except OSError:
+        # Every input read is wrapped above, so this is the report destination.
+        print("FAIL output could not be created; choose a writable new path", file=sys.stderr)
+        return 1
+    except UnicodeError:
+        print("FAIL output text could not be encoded as UTF-8", file=sys.stderr)
         return 1
     except json.JSONDecodeError:
         print("FAIL invalid JSON", file=sys.stderr)

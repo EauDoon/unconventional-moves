@@ -23,6 +23,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Changed
 
+- Check `screen` ceilings, `sources --max-age-days`, and `sources --as-of` when arguments are parsed, so an out-of-range number, a non-ASCII digit, or an impossible date exits 2 as the documented exit-code contract says, instead of 1 after reading the plan. File errors now say whether the input could not be read or the output could not be created.
 - Pin LF line endings in `.gitattributes`, so a Windows checkout with Git's default `autocrlf` packages the same file contents as a Unix checkout, and test that every packaged file is LF and every tracked file is either packaged or deliberately repository-only.
 - Ship the eval runner and its per-case fixtures in the package so the documented fixture check can run from an extracted archive.
 - Align revision diffs with digest representations and flag changed mechanisms, causal explanations, and tests for review.

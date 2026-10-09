@@ -130,6 +130,8 @@ The report preserves original order, explains every exclusion, and flags an out-
 
 Add `--max-start-hours 12 --max-duration-hours 24` to exclude declared start windows or experiment durations beyond your available window. A start ceiling of zero accepts only immediate-start declarations. These optional filters leave older command behavior intact and do not reschedule a move or prove that its latest start is feasible.
 
+Ceilings are checked when arguments are parsed: `--max-minutes` accepts 1 to 2880, `--max-start-hours` 0 to 48, and `--max-duration-hours` 1 to 48, written with ASCII digits. Any other value exits with code 2 before a file is read.
+
 ## Declared source dates
 
 Audit declared source dates against a reference date and age threshold you choose:
@@ -138,7 +140,7 @@ Audit declared source dates against a reference date and age threshold you choos
 python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 ```
 
-Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
+Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible. `--as-of` must be a real `YYYY-MM-DD` date written with ASCII digits and `--max-age-days` an integer from 0 to 36500; other values exit with code 2 before a file is read.
 
 The source audit also groups repeated URLs (ignoring fragments, host case, and default or empty ports, and treating an empty http or https path as `/`) and equal declared publisher names (ignoring case, repeated whitespace, and format characters such as zero-width spaces). Groups use the original one-based source positions and preserve every citation. Different URL paths, queries, and non-default ports remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
 

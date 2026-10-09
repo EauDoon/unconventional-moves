@@ -152,8 +152,11 @@ selection, handoff, recovery, checkpoint, and revision replay.
 
 A successful command exit means a report was produced. Exit 0 does not mean an
 experiment succeeded or was approved; 1 means invalid input or a file error,
-and 2 means invalid command arguments. Read the outcome, warnings, and stop
-reasons. Numeric success never overrides a stop condition or authorizes
+and 2 means invalid command arguments. Numeric ceilings and dates passed to
+`screen` and `sources` are checked when arguments are parsed, so an
+out-of-range value or an impossible date also exits 2. File errors say whether
+the input could not be read or the output could not be created. Read the
+outcome, warnings, and stop reasons. Numeric success never overrides a stop condition or authorizes
 continuation.
 
 Selection fields do not establish who selected a move or approve execution.
