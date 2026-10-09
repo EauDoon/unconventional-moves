@@ -235,6 +235,10 @@ def check_declared_suite(cases: list[dict]) -> list[str]:
 
 
 def main() -> int:
+    # Write UTF-8 with LF regardless of the console code page or
+    # PYTHONIOENCODING, so a printed path cannot raise UnicodeEncodeError.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     if not CASES_DIR.is_dir():
         print(f"cases directory missing: {CASES_DIR}", file=sys.stderr)
         return 2

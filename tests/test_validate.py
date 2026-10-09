@@ -1,6 +1,9 @@
 import contextlib
 import io
 import json
+import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -86,6 +89,45 @@ class ChangelogTests(unittest.TestCase):
             self.assertEqual(release_notes(root, "0.2.0"), "### Added\n\n- Synthetic second release.\n")
             self.assertEqual(release_notes(root, "0.1.0"), "### Added\n\n- Synthetic first release.\n")
             self.assertIsNone(release_notes(root, "9.9.9"))
+
+
+class Utf8OutputTests(unittest.TestCase):
+    """Printed paths must not depend on the console encoding."""
+
+    ASCII_ENV = {**os.environ, "PYTHONIOENCODING": "ascii", "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def test_validate_plan_reports_a_unicode_path_with_ascii_process_encoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / "caf\u00e9-\u6771\u4eac"
+            folder.mkdir()
+            plan = folder / "plan.json"
+            shutil.copy2(ROOT / "examples/example-plan.json", plan)
+            for extra in ((), ("--json",)):
+                with self.subTest(extra=extra):
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "scripts/validate_plan.py"), str(plan), *extra],
+                        env=self.ASCII_ENV, capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+                    self.assertNotIn(b"Traceback", result.stderr)
+                    stdout = result.stdout.decode("utf-8")
+                    if extra:
+                        self.assertEqual(json.loads(stdout), {"ok": True, "failures": []})
+                    else:
+                        self.assertIn(str(plan), stdout)
+
+    def test_repository_check_reports_a_unicode_file_name_with_ascii_process_encoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "caf\u00e9.md").write_text("# Synthetic note\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/validate.py"), "--repo-root", str(root)],
+                env=self.ASCII_ENV, capture_output=True,
+            )
+            # Required repository files are missing, so the check fails cleanly.
+            self.assertEqual(result.returncode, 1, result.stderr.decode("utf-8", "replace"))
+            self.assertNotIn(b"Traceback", result.stderr)
+            self.assertIn("caf\u00e9.md", result.stdout.decode("utf-8"))
 
 
 class ValidateTests(unittest.TestCase):

@@ -9,6 +9,10 @@ use UTF-8 and preserve Unicode. Rendering, validation, and review without an
 output argument do not create report files; use `python -B` to suppress Python's
 import caches as well. This encoding guarantee concerns successful
 report output; it does not authenticate the input or execute an experiment.
+`validate_plan.py`, `validate.py`, and `evals/runner.py` write their PASS and
+FAIL lines to standard output with the same UTF-8 and LF encoding, so a path
+or file name the console cannot represent is reported instead of raising
+`UnicodeEncodeError`.
 
 ```sh
 python scripts/moves.py init --output draft.json

@@ -397,6 +397,10 @@ class Checker:
 
 
 def main() -> int:
+    # Write UTF-8 with LF regardless of the console code page or
+    # PYTHONIOENCODING, so a printed path cannot raise UnicodeEncodeError.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true", dest="as_json")
