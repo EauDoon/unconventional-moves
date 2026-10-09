@@ -465,20 +465,28 @@ class ValidateTests(unittest.TestCase):
             )
 
     def test_encoded_null_in_link_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "README.md").write_text(
-                "[outside](%00../outside.md)\n",
-                encoding="utf-8",
-            )
+        # NUL, another C0 control, a line feed, DEL, and a zero-width space.
+        # The result must not depend on whether Path.resolve() raises, which
+        # differs between Python versions.
+        for encoded in ("%00", "%01", "%0a", "%7f", "%e2%80%8b"):
+            with self.subTest(encoded=encoded), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "README.md").write_text(
+                    f"[outside]({encoded}../outside.md)\n",
+                    encoding="utf-8",
+                )
 
-            checker = Checker(root)
-            checker.check_links()
+                checker = Checker(root)
+                checker.check_links()
 
-            self.assertTrue(
-                any("link target is valid:" in item for item in checker.failures),
-                checker.failures,
-            )
+                self.assertTrue(
+                    any("link target is valid:" in item for item in checker.failures),
+                    checker.failures,
+                )
+                self.assertFalse(
+                    any(item.startswith("link exists:") for item in checker.checks + checker.failures),
+                    checker.checks + checker.failures,
+                )
 
     def test_multiline_reference_definition_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

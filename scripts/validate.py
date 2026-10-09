@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from itertools import chain
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -250,6 +251,15 @@ class Checker:
                     self.ok(
                         False,
                         f"link path is UTF-8: {path.relative_to(self.root)} -> {target}",
+                    )
+                    continue
+                # Reject NUL, other C0 and C1 controls, DEL, and format
+                # characters before touching the filesystem. Whether resolve()
+                # raises for them differs between Python versions.
+                if any(unicodedata.category(character).startswith("C") for character in relative):
+                    self.ok(
+                        False,
+                        f"link target is valid: {path.relative_to(self.root)} -> {target}",
                     )
                     continue
                 portable_relative = relative.replace("\\", "/")

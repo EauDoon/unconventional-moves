@@ -33,6 +33,7 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Fixed
 
+- Reject control and format characters in repository link paths before resolving them, so the link check fails closed on every Python version instead of relying on `Path.resolve()` raising for NUL, which Python 3.13 and 3.14 on Windows no longer do.
 - Return exit code 2 when the eval rubric file is missing, instead of raising FileNotFoundError.
 - Reject NaN, Infinity, and non-finite numbers in eval fixtures instead of accepting Python's non-JSON constants.
 - Report a non-object eval fixture as a case failure instead of crashing while formatting the error.
