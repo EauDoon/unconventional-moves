@@ -91,5 +91,17 @@ class DocumentedCommandTests(unittest.TestCase):
         self.assertEqual(self.run_blocks(blocks), 5)
 
 
+class RepositoryTemplateTests(unittest.TestCase):
+    def test_pull_request_template_matches_the_contribution_rules(self):
+        template = ROOT / ".github/PULL_REQUEST_TEMPLATE.md"
+        if not template.is_file():
+            self.skipTest("repository templates are not shipped in the package")
+        text = template.read_text(encoding="utf-8")
+        # GitHub does not parse front matter in pull request templates.
+        self.assertFalse(text.startswith("---"))
+        self.assertIn("python scripts/check.py", text)
+        self.assertIn("[Unreleased]", text)
+
+
 if __name__ == "__main__":
     unittest.main()
