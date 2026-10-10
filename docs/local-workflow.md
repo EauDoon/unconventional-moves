@@ -1,6 +1,6 @@
 # Local plan workflow
 
-Use Python 3.11 or 3.12. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
+Use Python 3.11 to 3.14. These are the CI matrix versions; newer Python versions are unverified. All commands use the standard library and make no network requests. From the repository or extracted package root:
 
 Successful `moves.py` and `moves_cli.py` output uses UTF-8 with LF newlines,
 including redirected stdout, independently of the process locale or
@@ -9,6 +9,10 @@ use UTF-8 and preserve Unicode. Rendering, validation, and review without an
 output argument do not create report files; use `python -B` to suppress Python's
 import caches as well. This encoding guarantee concerns successful
 report output; it does not authenticate the input or execute an experiment.
+`validate_plan.py`, `validate.py`, and `evals/runner.py` write their PASS and
+FAIL lines to standard output with the same UTF-8 and LF encoding, so a path
+or file name the console cannot represent is reported instead of raising
+`UnicodeEncodeError`.
 
 ```sh
 python scripts/moves.py init --output draft.json
@@ -126,6 +130,8 @@ The report preserves original order, explains every exclusion, and flags an out-
 
 Add `--max-start-hours 12 --max-duration-hours 24` to exclude declared start windows or experiment durations beyond your available window. A start ceiling of zero accepts only immediate-start declarations. These optional filters leave older command behavior intact and do not reschedule a move or prove that its latest start is feasible.
 
+Ceilings are checked when arguments are parsed: `--max-minutes` accepts 1 to 2880, `--max-start-hours` 0 to 48, and `--max-duration-hours` 1 to 48, written with ASCII digits. Any other value exits with code 2 before a file is read.
+
 ## Declared source dates
 
 Audit declared source dates against a reference date and age threshold you choose:
@@ -134,9 +140,9 @@ Audit declared source dates against a reference date and age threshold you choos
 python scripts/moves.py sources draft.json --as-of 2026-09-10 --max-age-days 30
 ```
 
-Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible.
+Missing, invalid, future, and older dates are distinguished. A date within the threshold is not a verified current source. No network request occurs; publisher identity, content, relevance, and high-stakes suitability still need human verification. The explicit reference date makes the report reproducible. `--as-of` must be a real `YYYY-MM-DD` date written with ASCII digits and `--max-age-days` an integer from 0 to 36500; other values exit with code 2 before a file is read.
 
-The source audit also groups repeated URLs (ignoring fragments, host case, and default or empty ports) and equal declared publisher names (ignoring case, repeated whitespace, and format characters such as zero-width spaces). Groups use the original one-based source positions and preserve every citation. Different URL paths, queries, and non-default ports remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
+The source audit also groups repeated URLs (ignoring fragments, host case, and default or empty ports, and treating an empty http or https path as `/`) and equal declared publisher names (ignoring case, repeated whitespace, and format characters such as zero-width spaces). Groups use the original one-based source positions and preserve every citation. Different URL paths, queries, and non-default ports remain distinct. These prompts identify possible repeated support; neither an empty group list nor different publisher names establish independent evidence.
 
 ## Cumulative checkpoints
 
@@ -148,11 +154,13 @@ python scripts/moves.py timeline draft.json checkpoints.json --output timeline-r
 
 `checkpoints.json` is an array of 1 to 100 completed outcome records in increasing elapsed-hour order. Active minutes are cumulative and cannot decrease. Each record must match the current digest and move. Any earlier stop reason remains in the final decision, even if a later record clears its flag. Entries recorded after the first stop are identified for human review. The report does not schedule, combine independent trials, or authorize continued activity.
 
-Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Even a small declared overrun of that interval is rejected.
+Checkpoint interval checks use decimal arithmetic so a six-minute activity increase from 0.2 to 0.3 elapsed hours is accepted exactly. Intervals keep the 28 significant digits of earlier releases unless that would round them; precision then widens to at least the combined magnitude range of the checkpoint values, so even a declared overrun far smaller than the interval is rejected rather than rounded away.
 
 The shared outcome validator also compares cumulative elapsed time in decimal, accepting exactly 1.8 active minutes at 0.03 elapsed hours across outcome, record, timeline, and handoff commands. It rejects actual excess instead of adding a tolerance that could hide it.
 
 Each timeline row includes decimal-string interval hours, active minutes, and activity fraction. The first interval begins at zero; a zero-length initial interval has a `null` fraction. Later idle intervals report zero activity. These describe reported effort, not productivity or an instruction to use the remaining time.
+
+Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
 
 ### Export checkpoint history to a spreadsheet
 
@@ -177,7 +185,7 @@ Every row retains `human_review_required`. The entire history is validated befor
 output is created, and existing files are never overwritten. JSON remains the
 default format and existing handoffs are unchanged.
 
-## Measurement context
+## Record cumulative checkpoints
 
 Use `python scripts/moves.py record draft.json observation.json --output checkpoints.json` to begin a checkpoint history. Add `--history checkpoints.json --output next-checkpoints.json` for the next observation. The complete history is validated before a new file is created. Existing history is never rewritten. Reports may retain honest after-stop observations; recording one does not authorize activity after a stop.
 
@@ -185,11 +193,9 @@ An explicitly supplied history must be a JSON array, including `[]` for an inten
 
 ## Measurement interpretation
 
-Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings (or `null` without a measurement). Precision follows the parsed operands, with at least 28 significant digits, so extreme finite inputs stay finite and a displayed fraction of 1 means the observed value is the numeric target. A negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
+Outcome reviews include the declared metric, baseline, target, direction, and observed value. `change_from_baseline` and `progress_fraction` are decimal strings (or `null` without a measurement). Precision is the one earlier releases used (at least 28 significant digits, and at least each operand's digit count plus the size of its exponent), so `verify-handoff` still accepts their bundles. Where that precision would round a difference, or display a fraction of 1 for a value that is not the target, it widens to at least the combined magnitude range of the baseline, target, and observed value (from the largest leading digit to the smallest trailing digit). Differences therefore stay exact, extreme finite inputs stay finite, and a displayed fraction of 1 means the observed value is the numeric target. Remaining and overrun bounds are always computed exactly. A negative fraction moves away, and values above 1 exceed it. This is descriptive progress, not evidence of causation or permission to continue.
 
 ## Observation drafts
-
-Timeline `measurement_summary` identifies missing checkpoints, the first reported numeric target attainment, and every later measured checkpoint below that target. Missing data is never treated as attainment or regression. Attainment after an earlier stop is flagged and cannot clear the stop. These are descriptive checkpoints, not independent samples or proof of durable improvement.
 
 To avoid copying the wrong digest or move ID, prepare a revision-bound observation draft:
 
@@ -227,7 +233,7 @@ Use `python scripts/moves.py debrief draft.json checkpoints.json --output debrie
 python scripts/moves.py compare draft.json revised.json --output changes.json
 ```
 
-The report matches moves by ID, distinguishes reordering from content changes, and shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.
+The report matches moves by ID and distinguishes reordering from content changes. `move_order_changed` means that moves kept in both revisions changed their relative order; an added or removed move appears in `added_move_ids` or `removed_move_ids` and is not reported as a reorder. The report shows before/after values for changed experiment bounds, sources, selected action, and goal. Keep IDs stable when revising a move. Replacing a mechanism entirely can justify a new ID. Review any changed limits or exposure before another trial. A diff reports change, not improvement.
 
 ## Replay a complete synthetic history
 

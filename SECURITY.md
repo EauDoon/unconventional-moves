@@ -8,7 +8,7 @@ Security concerns may still include instructions that encourage unsafe conduct, 
 
 ## Reporting a concern
 
-Use the repository host's private vulnerability reporting channel when one is available. Describe the affected file, the risk, a minimal reproduction, and a proposed safe outcome.
+Use the repository host's private vulnerability reporting channel when one is available. The repository's Security tab shows whether private vulnerability reporting is enabled; when it is, use its option to report a vulnerability. Describe the affected file, the risk, a minimal reproduction, and a proposed safe outcome.
 
 Do not include credentials, private data, or suspected secret values in a report. Redact sensitive values and provide only the minimum information needed to reproduce the issue. If no private reporting channel exists, provide a minimal redacted report without publishing exploit details.
 

@@ -376,6 +376,27 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result["removed_move_ids"], ["move-05"])
 
 
+    def test_adding_or_removing_a_move_is_not_a_reorder(self):
+        from moves import compare_plans
+        before = bounded_example()
+        appended = copy.deepcopy(before)
+        appended["moves"].append(dict(copy.deepcopy(before["moves"][0]), id="move-06"))
+        self.assertEqual(validate_plan_data(appended), [])
+        result = compare_plans(before, appended)
+        self.assertEqual(result["added_move_ids"], ["move-06"])
+        self.assertFalse(result["move_order_changed"])
+        self.assertTrue(result["observation_binding_changed"])
+        removed = copy.deepcopy(before)
+        removed["moves"] = [move for move in removed["moves"] if move["id"] != "move-05"]
+        removed["moves"].append(dict(copy.deepcopy(before["moves"][0]), id="move-07"))
+        result = compare_plans(before, removed)
+        self.assertEqual(result["removed_move_ids"], ["move-05"])
+        self.assertFalse(result["move_order_changed"])
+        swapped = copy.deepcopy(appended)
+        swapped["moves"][1], swapped["moves"][2] = swapped["moves"][2], swapped["moves"][1]
+        self.assertTrue(compare_plans(before, swapped)["move_order_changed"])
+
+
 class PackagedWorkflowTests(unittest.TestCase):
     def test_extracted_package_and_synthetic_install(self):
         import hashlib
@@ -526,6 +547,55 @@ class SelectionTests(unittest.TestCase):
         self.assertLess(Decimal(measurement["progress_fraction"]), Decimal(1))
         self.assertNotIn("Infinity", json.dumps(review, allow_nan=False))
 
+    def test_progress_stays_exact_when_operand_magnitudes_differ(self):
+        # Compare Decimal values: an inexact quotient may carry trailing zeros.
+        from decimal import Decimal
+        from moves import evaluate_outcome, plan_digest
+        for baseline, target, direction, observed, expected_met in (
+                (1e30, 1e-5, "decrease", 2e-5, False),
+                (-1e40, 1e-12, "increase", 2e-12, True)):
+            with self.subTest(baseline=baseline, target=target):
+                plan = bounded_example()
+                plan["moves"][0]["experiment"].update(baseline=baseline, target=target, direction=direction)
+                self.assertEqual(validate_plan_data(plan), [])
+                observation = OutcomeTests().observation(plan)
+                observation.update(observed_value=observed, plan_sha256=plan_digest(plan))
+                review = evaluate_outcome(plan, observation)
+                self.assertIs(review["target_met"], expected_met)
+                progress = Decimal(review["measurement"]["progress_fraction"])
+                # A fraction of exactly 1 would claim the observed value is the target.
+                self.assertNotEqual(progress, 1)
+                self.assertEqual(progress > 1, expected_met)
+                if direction == "decrease":
+                    self.assertEqual(Decimal(review["measurement"]["change_from_baseline"]),
+                                     Decimal("-999999999999999999999999999999.99998"))
+
+    def test_progress_strings_match_earlier_releases_when_their_arithmetic_was_exact(self):
+        # verify-handoff recomputes these strings and requires an exact match,
+        # so bundles written by 0.2.0 must keep the same digits. The expected
+        # strings are what 0.2.0 produced for the same inputs.
+        from moves import measurement_context
+        experiment = bounded_example()["moves"][0]["experiment"]
+        for target, observed, change, progress in (
+                (7, 0.1 + 0.2, "0.30000000000000004", "0.04285714285714286285714285714285714"),
+                (7, 1e30, "1000000000000000000000000000000", "142857142857142857142857142857.1")):
+            with self.subTest(observed=observed):
+                measurement = measurement_context({**experiment, "baseline": 0, "target": target}, observed)
+                self.assertEqual(measurement["change_from_baseline"], change)
+                self.assertEqual(measurement["progress_fraction"], progress)
+
+    def test_progress_widens_when_earlier_precision_would_display_one(self):
+        # 0.2.0 rounded this fraction to 1.000000000000000000000000000, which
+        # claimed the observed value was the target.
+        from decimal import Decimal
+        from moves import measurement_context
+        experiment = {**bounded_example()["moves"][0]["experiment"],
+                      "baseline": 0, "target": 5000000000000000000000000001}
+        measurement = measurement_context(experiment, 5000000000000000000000000002)
+        self.assertEqual(measurement["change_from_baseline"], "5000000000000000000000000002")
+        self.assertEqual(measurement["progress_fraction"], "1.000000000000000000000000000200")
+        self.assertGreater(Decimal(measurement["progress_fraction"]), 1)
+
     def test_observation_draft_requires_completion_and_matches_selection(self):
         from moves import observation_draft, evaluate_outcome, select_plan
         plan = select_plan(bounded_example(), "move-02", "Practice fit", "Review setup")
@@ -663,6 +733,48 @@ class FullWorkflowTests(unittest.TestCase):
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertNotIn("secret_marker", result.stderr)
 
+    def test_invalid_argument_values_exit_2_at_parse_time(self):
+        plan = ROOT / "examples/bounded-plan.json"
+        screen = ("screen", plan, "--exposure", "self_only")
+        for args in (
+            (*screen, "--max-minutes", "0"),
+            (*screen, "--max-minutes", "2881"),
+            (*screen, "--max-minutes", "\uff15"),
+            (*screen, "--max-minutes", "20", "--max-start-hours", "99"),
+            (*screen, "--max-minutes", "20", "--max-duration-hours", "0"),
+            ("sources", plan, "--as-of", "2026-02-30", "--max-age-days", "30"),
+            ("sources", plan, "--as-of", "\uff12\uff10\uff12\uff16-09-10", "--max-age-days", "30"),
+            ("sources", plan, "--as-of", "2026-09-10", "--max-age-days", "-1"),
+        ):
+            with self.subTest(args=args[2:]):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("usage:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+        # Boundary values remain accepted.
+        for args in ((*screen, "--max-minutes", "2880", "--max-start-hours", "0", "--max-duration-hours", "48"),
+                     ("sources", plan, "--as-of", "2026-09-10", "--max-age-days", "0")):
+            with self.subTest(args=args[2:]):
+                self.assertEqual(self.run_cli(*args).returncode, 0)
+
+    def test_file_errors_name_the_input_or_the_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            result = self.run_cli("review", ROOT / "examples/bounded-plan.json",
+                                  "--output", temp / "missing-directory" / "review.json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL output could not be created", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            result = self.run_cli("review", temp / "missing.json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL input file is unavailable", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            existing = temp / "existing.json"
+            existing.write_text("{}", encoding="utf-8")
+            result = self.run_cli("review", ROOT / "examples/bounded-plan.json", "--output", existing)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("FAIL output already exists", result.stderr)
+
     def test_large_integers_do_not_overflow_and_decrease_works(self):
         from moves import evaluate_outcome, plan_digest
         plan = bounded_example()
@@ -716,6 +828,34 @@ class FullWorkflowTests(unittest.TestCase):
                     self.assertEqual(rejected, not low <= count <= high)
 
 
+class CheckRunnerTests(unittest.TestCase):
+    """Never run the full check.py here: its unit-test step would recurse."""
+
+    def test_list_prints_the_ci_check_set_in_order(self):
+        from check import CHECKS, describe
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/check.py"), "--list"],
+                                cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        listed = result.stdout.splitlines()
+        self.assertEqual(listed, [describe(check) for check in CHECKS])
+        for expected in ("python scripts/validate.py",
+                         "python scripts/validate_plan.py examples/example-plan.json",
+                         "python scripts/validate_plan.py examples/bounded-plan.json --json",
+                         "python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json",
+                         "python -m unittest discover -s tests -v",
+                         "python evals/runner.py"):
+            self.assertIn(expected, listed)
+        self.assertTrue(listed[-1].startswith("python scripts/package.py --output "))
+
+    def test_contributor_docs_and_ci_use_the_check_runner(self):
+        for name in ("README.md", "CONTRIBUTING.md"):
+            with self.subTest(file=name):
+                self.assertIn("python scripts/check.py", (ROOT / name).read_text(encoding="utf-8"))
+        workflow = ROOT / ".github/workflows/ci.yml"
+        if workflow.is_file():
+            self.assertIn("python scripts/check.py", workflow.read_text(encoding="utf-8"))
+
+
 class VersionGateTests(unittest.TestCase):
     """The shim exists to refuse a v0.1 plan at the CLI boundary, not later."""
 
@@ -732,6 +872,14 @@ class VersionGateTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("requires a v0.2 plan", result.stderr)
                 self.assertNotIn("experiment workflow requires", result.stderr)
+
+    def test_docstring_lists_every_gated_command(self):
+        import moves_cli
+        listed = moves_cli.__doc__.split("Rules:")[0]
+        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS):
+            with self.subTest(command=command):
+                self.assertRegex(listed, r"(?<![\w-])" + command + r"(?![\w-])")
+        self.assertIn("single source of\ntruth for behavior", listed)
 
     def test_shared_commands_still_accept_a_v01_plan(self):
         from moves_cli import SHARED_COMMANDS

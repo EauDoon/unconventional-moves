@@ -4,8 +4,11 @@ import importlib.util
 import io
 import json
 import hashlib
+import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
@@ -296,6 +299,24 @@ class EvaluationFixtureTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()):
                 code = runner.main()
         self.assertEqual(code, 2)
+
+    def test_runner_reports_a_unicode_case_name_with_ascii_process_encoding(self):
+        # Run a copied runner so the invalid case file never touches the suite.
+        with tempfile.TemporaryDirectory() as td:
+            evals = Path(td) / "evals"
+            evals.mkdir()
+            for name in ("runner.py", "rubric.md", "cases.json"):
+                shutil.copy2(ROOT / "evals" / name, evals / name)
+            shutil.copytree(ROOT / "evals" / "cases", evals / "cases")
+            (evals / "cases" / "caf\u00e9.json").write_text("{}\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(evals / "runner.py")],
+                env={**os.environ, "PYTHONIOENCODING": "ascii", "PYTHONDONTWRITEBYTECODE": "1"},
+                capture_output=True,
+            )
+        self.assertEqual(result.returncode, 1, result.stderr.decode("utf-8", "replace"))
+        self.assertNotIn(b"Traceback", result.stderr)
+        self.assertIn("FAIL  caf\u00e9  missing required fields", result.stdout.decode("utf-8"))
 
     def test_missing_rubric_uses_exit_code_2(self):
         spec = importlib.util.spec_from_file_location("eval_runner_rubric", ROOT / "evals" / "runner.py")

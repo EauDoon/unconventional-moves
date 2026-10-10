@@ -6,7 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import test_workflow as fixtures
 import moves
@@ -227,6 +227,20 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertEqual(result["repeated_url_groups"], [[1, 2, 3], [5, 6], [7, 8]])
         self.assertNotIn(4, [index for group in result["repeated_url_groups"] for index in group])
 
+    def test_bare_host_urls_group_with_the_root_path(self):
+        urls = [
+            "https://example.test",
+            "https://EXAMPLE.test/",
+            "HTTPS://example.test:443/#x",
+            "https://example.test/a",
+            "https://example.test?q=1",
+            "https://example.test/?q=1",
+        ]
+        self.plan["sources"] = [{"title": "Synthetic language source", "url": url,
+                                  "supports": "Practice hypothesis"} for url in urls]
+        result = moves.audit_sources(self.plan, "2026-09-11", 30)
+        self.assertEqual(result["repeated_url_groups"], [[1, 2, 3], [5, 6]])
+
     def test_screen_respects_start_and_duration_without_reselection(self):
         self.plan["moves"][1]["experiment"].update(start_within_hours=0, duration_hours=1)
         result = moves.screen_moves(self.plan, 20, "self_only", 0, 1)
@@ -303,6 +317,27 @@ class CheckpointReviewTests(unittest.TestCase):
         self.assertEqual(len(moves.review_timeline(self.plan, [self.first, self.second])["checkpoints"]), 2)
         with self.assertRaises(ValueError):
             moves.review_timeline(self.plan, [self.first, {**self.second, "active_minutes": 8.000001}])
+
+    def test_interval_and_bound_arithmetic_stay_exact_across_magnitudes(self):
+        tiny = {**self.first, "elapsed_hours": 1e-300, "active_minutes": 0}
+        # The second interval is 6e-299 minutes shorter than 60 minutes.
+        with self.assertRaisesRegex(ValueError, "checkpoint active-time increase exceeds the elapsed interval"):
+            moves.review_timeline(self.plan, [tiny, {**self.first, "elapsed_hours": 1, "active_minutes": 60}])
+        rows = moves.review_timeline(self.plan, [tiny, {**self.first, "elapsed_hours": 1, "active_minutes": 59}])["checkpoints"]
+        remaining = moves.review_limits(self.plan, [tiny])["bounds"]["elapsed_hours"]["remaining"]
+        with localcontext() as context:
+            context.prec = 400
+            self.assertEqual(Decimal(rows[1]["interval_hours"]), Decimal(1) - Decimal("1e-300"))
+            self.assertEqual(Decimal(remaining), Decimal(48) - Decimal("1e-300"))
+        self.assertLess(Decimal(rows[1]["interval_activity_fraction"]), 1)
+
+    def test_interval_fraction_keeps_earlier_precision_when_intervals_are_exact(self):
+        # The values span more than 24 digits but subtract exactly, so the
+        # fraction keeps the 28 digits that 0.2.0 wrote into timeline handoffs.
+        row = {**self.first, "elapsed_hours": 10000, "active_minutes": 1.2345678901234568e-05}
+        checkpoint = moves.review_timeline(self.plan, [row])["checkpoints"][0]
+        self.assertEqual(checkpoint["interval_active_minutes"], "0.000012345678901234568")
+        self.assertEqual(checkpoint["interval_activity_fraction"], "2.057613150205761333333333333E-11")
 
     def test_activity_ledger_distinguishes_idle_and_full_intervals(self):
         observations = [self.first, self.second, {**self.second, "elapsed_hours": 1}]

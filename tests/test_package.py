@@ -103,9 +103,14 @@ class PackageTests(unittest.TestCase):
                          ["evals/runner.py"],
                          ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
                           "--output-dir", str(root / "shim-restored")],
-                         ["scripts/moves.py", "render", "examples/example-plan.json"]):
+                         ["scripts/moves.py", "render", "examples/example-plan.json"],
+                         ["scripts/moves.py", "--version"],
+                         ["scripts/moves_cli.py", "--version"]):
                 result = subprocess.run([sys.executable, *args], cwd=package, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if args[-1] == "--version":
+                    # An extracted archive has no git metadata; VERSION identifies it.
+                    self.assertEqual(result.stdout, f"unconventional-moves {version_for(ROOT)}\n")
             # Neither replay nor recovery may overwrite an earlier result.
             original = (replay / "replay-summary.json").read_bytes()
             result = subprocess.run([sys.executable, str(package / "examples/replay-handoff.py"),
@@ -183,6 +188,31 @@ class PackageTests(unittest.TestCase):
                                      sorted(prefix + path.relative_to(ROOT).as_posix() for path in files_for(ROOT)))
             self.assertEqual(*archives)
 
+    def test_packaged_files_use_lf_line_endings(self):
+        # .gitattributes pins LF, so a Windows checkout with autocrlf packages
+        # the same file contents as a Unix checkout.
+        for path in files_for(ROOT):
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                self.assertNotIn(b"\r", path.read_bytes())
+
+    def test_manifest_covers_every_tracked_file(self):
+        if not (ROOT / ".git").exists():
+            self.skipTest("not a git checkout")
+        try:
+            listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"],
+                                    capture_output=True, check=True)
+        except (OSError, subprocess.CalledProcessError):
+            self.skipTest("git ls-files is unavailable")
+        tracked = {name for name in listed.stdout.decode("utf-8").split("\0") if name}
+        manifest = set(json.loads((ROOT / "package-manifest.json").read_text(encoding="utf-8")))
+        self.assertLessEqual(manifest, tracked, "manifest names a file git does not track")
+        # Repository-only files: workflow and community templates, audit
+        # records, and git configuration. Everything else must ship.
+        unpackaged = {name for name in tracked - manifest
+                      if not name.startswith((".github/", "audits/"))
+                      and name not in {".gitignore", ".gitattributes"}}
+        self.assertEqual(unpackaged, set(), "tracked file missing from package-manifest.json")
+
     def test_manifest_rejects_nonportable_names_and_symlink_ancestors(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -248,6 +278,7 @@ class PackageTests(unittest.TestCase):
             root = Path(td) / "project"
             (root / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
+            shutil.copy2(ROOT / "scripts/versioning.py", root / "scripts/versioning.py")
             (root / "package-manifest.json").write_text("[]", encoding="utf-8")
             output = root / "dist"
 
@@ -262,14 +293,20 @@ class PackageTests(unittest.TestCase):
                         for path in root.rglob("*")
                     }
 
+                    # Importing the copied versioning.py must not add a
+                    # bytecode cache to the snapshot; only package output counts.
                     result = subprocess.run(
                         [sys.executable, str(root / "scripts/package.py"), "--output", str(output)],
+                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                         capture_output=True,
                         text=True,
                         check=False,
                     )
 
                     self.assertNotEqual(result.returncode, 0)
+                    # Fail on the VERSION check itself, not on a missing import.
+                    self.assertIn("FAIL package could not be created", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
                     self.assertFalse(output.exists())
                     self.assertEqual(
                         {
@@ -284,6 +321,7 @@ class PackageTests(unittest.TestCase):
             root = Path(td) / "project"
             (root / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/package.py", root / "scripts/package.py")
+            shutil.copy2(ROOT / "scripts/versioning.py", root / "scripts/versioning.py")
             (root / "VERSION").write_text("0.1.0\n", encoding="utf-8")
             (root / "payload.txt").write_text("release content\n", encoding="utf-8")
             manifest = root / "package-manifest.json"
@@ -302,6 +340,86 @@ class PackageTests(unittest.TestCase):
 
             self.assertNotEqual(failed.returncode, 0)
             self.assertEqual((archive.read_bytes(), checksum.read_bytes()), previous)
+
+
+class VersionFlagTests(unittest.TestCase):
+    ENTRY_POINTS = (
+        ("scripts/moves.py",),
+        ("-m", "scripts.moves"),
+        ("scripts/moves_cli.py",),
+        ("scripts/validate_plan.py",),
+        ("scripts/validate.py",),
+        ("scripts/package.py",),
+        ("scripts/check.py",),
+    )
+    ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def test_every_entry_point_reports_the_version_file(self):
+        expected = f"unconventional-moves {version_for(ROOT)}\n".encode("ascii")
+        for entry in self.ENTRY_POINTS:
+            with self.subTest(entry=entry):
+                result = subprocess.run([sys.executable, *entry, "--version"], cwd=ROOT,
+                                        env=self.ENV, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+                self.assertEqual(result.stderr, b"")
+
+    def test_package_version_flag_creates_no_output_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "dist"
+            result = subprocess.run([sys.executable, str(ROOT / "scripts/package.py"),
+                                     "--output", str(output), "--version"],
+                                    env=self.ENV, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(output.exists())
+
+    def test_invalid_version_file_fails_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "project"
+            (root / "scripts").mkdir(parents=True)
+            for name in ("package.py", "versioning.py"):
+                shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
+            (root / "VERSION").write_text("v1.2\n", encoding="utf-8")
+            result = subprocess.run([sys.executable, str(root / "scripts/package.py"), "--version"],
+                                    env=self.ENV, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("FAIL VERSION is missing or invalid", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+
+class ReleaseGateTests(unittest.TestCase):
+    """The release workflow publishes only when these commands succeed."""
+
+    def run_versioning(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "scripts/versioning.py"), *args], cwd=ROOT,
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def test_check_tag_requires_v_plus_version(self):
+        version = version_for(ROOT)
+        result = self.run_versioning("--check-tag", "v" + version)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for tag in ("v0.0.1", "X", version, "v" + version + "-rc1", ""):
+            with self.subTest(tag=tag):
+                result = self.run_versioning("--check-tag", tag)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("FAIL tag", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_notes_print_one_dated_section(self):
+        from versioning import release_notes
+        version = version_for(ROOT)
+        result = self.run_versioning("--notes", version)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, release_notes(ROOT, version))
+        self.assertIn("\n- ", result.stdout)
+        self.assertNotIn("## [", result.stdout)
+        self.assertNotIn("/compare/", result.stdout)
+        result = self.run_versioning("--notes", "9.9.9")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("FAIL", result.stderr)
 
 
 if __name__ == "__main__":

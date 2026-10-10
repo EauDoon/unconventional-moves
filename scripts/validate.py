@@ -5,16 +5,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+import unicodedata
 from itertools import chain
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from validate_plan import contains_unsafe_action, load_plan_json, validate_plan_data
+from versioning import VersionAction, changelog_problems
 
 UNSAFE_STRUCTURE = re.compile(r"(?i)\b(?:ignore\s+(?:consent|scope|safety)|disable\s+safety|exfiltrat\w*)\b")
 EXTERNAL_SCHEMES = {"http", "https", "mailto"}
+# Version control, build output, and tool caches. A file with one of these
+# names (such as a worktree's .git file) is skipped as well.
+SKIPPED_DIRECTORIES = frozenset({
+    ".git", "dist", "__pycache__", "node_modules", ".tox", ".mypy_cache", ".pytest_cache",
+})
 MARKDOWN_ESCAPABLE = frozenset(r'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
 # Em dash (U+2014, ASCII minus here), en dash (U+2013, ASCII minus here), figure dash (U+2012), horizontal bar (U+2015),
 # minus sign (U+2212), and the mdash entity / ndash entity HTML entities.
@@ -139,6 +147,21 @@ def inline_link_targets(text: str):
             yield None, f"offset {marker}: {exc}"
 
 
+def project_files(root: Path):
+    """Yield project files under root.
+
+    Skip version control, build output, tool caches, and virtual environments
+    (any directory holding a pyvenv.cfg); they are not project content.
+    """
+    for directory, dirnames, filenames in os.walk(root):
+        base = Path(directory)
+        dirnames[:] = [name for name in dirnames
+                       if name not in SKIPPED_DIRECTORIES and not (base / name / "pyvenv.cfg").is_file()]
+        for name in filenames:
+            if name not in SKIPPED_DIRECTORIES:
+                yield base / name
+
+
 def reference_definition_bodies(text: str):
     offset = 0
     for raw_line in text.splitlines(keepends=True):
@@ -214,10 +237,12 @@ class Checker:
 
     def check_links(self) -> None:
         root_resolved = self.root.resolve()
-        for path in sorted(self.root.rglob("*.md")):
-            if ".git" in path.parts or "dist" in path.parts:
+        for path in sorted(path for path in project_files(self.root) if path.suffix == ".md"):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                self.ok(False, f"markdown is UTF-8: {path.relative_to(self.root)}")
                 continue
-            content = path.read_text(encoding="utf-8")
             targets = chain(inline_link_targets(content), reference_link_targets(content))
             for target, syntax_error in targets:
                 if syntax_error:
@@ -251,6 +276,15 @@ class Checker:
                         f"link path is UTF-8: {path.relative_to(self.root)} -> {target}",
                     )
                     continue
+                # Reject NUL, other C0 and C1 controls, DEL, and format
+                # characters before touching the filesystem. Whether resolve()
+                # raises for them differs between Python versions.
+                if any(unicodedata.category(character).startswith("C") for character in relative):
+                    self.ok(
+                        False,
+                        f"link target is valid: {path.relative_to(self.root)} -> {target}",
+                    )
+                    continue
                 portable_relative = relative.replace("\\", "/")
                 try:
                     candidate = (path.parent / portable_relative).resolve()
@@ -279,6 +313,10 @@ class Checker:
         self.ok(len(re.findall(r"^\*\*Prioritized action:", skill, re.MULTILINE)) == 1, "skill names one prioritized action contract")
         self.ok("display_name: \"Unconventional Moves\"" in yaml, "metadata display name is stable")
         self.ok("scripts/validate.py" in readme and "schemas/moves.schema.json" in readme, "README exposes validator and schema")
+
+        problems = changelog_problems(self.root)
+        self.ok(not problems, "VERSION matches the newest CHANGELOG release")
+        self.failures.extend(f"changelog: {problem}" for problem in problems)
 
         schema = self.json_file("schemas/moves.schema.json")
         if isinstance(schema, dict):
@@ -367,8 +405,13 @@ class Checker:
             self.ok(expected.issubset(set(ids)), "adversarial fixtures cover four required behaviors")
             self.ok(len(ids) == len(set(ids)), "adversarial fixture IDs are unique")
 
-        for path in sorted(self.root.rglob("*")):
-            if not path.is_file() or ".git" in path.parts or "dist" in path.parts:
+        self.check_text_files()
+        self.check_links()
+
+    def check_text_files(self) -> None:
+        """Apply the dash ban and the lexical safety screen to project text files."""
+        for path in sorted(project_files(self.root)):
+            if not path.is_file():
                 continue
             try:
                 content = path.read_text(encoding="utf-8")
@@ -378,11 +421,15 @@ class Checker:
             if path.suffix in {".md", ".yaml", ".yml", ".json"}:
                 self.ok(not contains_unsafe_action(content, UNSAFE_STRUCTURE),
                         f"no unqualified lexical safety-pattern match: {path.relative_to(self.root)}")
-        self.check_links()
 
 
 def main() -> int:
+    # Write UTF-8 with LF regardless of the console code page or
+    # PYTHONIOENCODING, so a printed path cannot raise UnicodeEncodeError.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()

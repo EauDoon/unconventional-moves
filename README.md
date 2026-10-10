@@ -111,8 +111,10 @@ safety boilerplate.
 
 The Python CLI authors and validates plans, renders review reports, and records
 observations. It makes no model calls and executes no real-world experiments.
-Use Python 3.11 or 3.12 (the CI matrix versions); `python` below means your verified interpreter (for
-example, `py` on Windows or `python3` on Unix).
+Use Python 3.11 to 3.14 (the CI matrix versions); `python` below means your verified interpreter (for
+example, `py` on Windows or `python3` on Unix). Each script accepts `--version`;
+`python scripts/moves.py --version` prints the package version from `VERSION`,
+which identifies an extracted archive that has no git history.
 
 From a fresh copy of the repository or an extracted package, run:
 
@@ -152,8 +154,11 @@ selection, handoff, recovery, checkpoint, and revision replay.
 
 A successful command exit means a report was produced. Exit 0 does not mean an
 experiment succeeded or was approved; 1 means invalid input or a file error,
-and 2 means invalid command arguments. Read the outcome, warnings, and stop
-reasons. Numeric success never overrides a stop condition or authorizes
+and 2 means invalid command arguments. Numeric ceilings and dates passed to
+`screen` and `sources` are checked when arguments are parsed, so an
+out-of-range value or an impossible date also exits 2. File errors say whether
+the input could not be read or the output could not be created. Read the
+outcome, warnings, and stop reasons. Numeric success never overrides a stop condition or authorizes
 continuation.
 
 Selection fields do not establish who selected a move or approve execution.
@@ -190,14 +195,20 @@ files and commands that ship in this repository.
 
 ## Validate and package
 
-From the repository root:
+From the repository root, run the same check set as CI:
 
 ```sh
-python scripts/validate.py
-python scripts/validate_plan.py examples/example-plan.json
-python scripts/validate_plan.py examples/bounded-plan.json --json
-python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json
-python -m unittest discover -s tests -v
+python scripts/check.py
+```
+
+It runs, in order and stopping at the first failure: `scripts/validate.py`,
+both example plan validators, the synthetic outcome replay,
+`python -m unittest discover -s tests -v`, the offline eval fixture runner
+`evals/runner.py`, and a package build into a temporary directory.
+`python scripts/check.py --list` prints the exact commands. To build a package
+you keep, run:
+
+```sh
 python scripts/package.py --output dist
 ```
 
@@ -208,14 +219,23 @@ leaves previous output untouched and does not publish a mismatched pair. Choose 
 new path for each build; do not delete an earlier release to make a rerun succeed.
 The builder uses only the standard
 library and produces a versioned ZIP and SHA-256 checksum. Compare two clean
-builds under the same environment to check reproducibility. Cross-platform
-byte identity requires testing, not an assumption.
+builds under the same environment to check reproducibility. `.gitattributes`
+pins LF line endings, so Windows and Unix checkouts package the same file
+contents; compressed archive bytes can still differ between Python or zlib
+builds, so cross-platform byte identity requires testing, not an assumption.
 
 Extract the archive into a fresh directory, verify its checksum against the
 builder's checksum file, then copy the extracted `skill/unconventional-moves`
 directory to the project skill location above. A checksum detects a content
 mismatch; it does not authenticate the publisher. Packaging does not publish
 or change remote metadata.
+
+Archives published on the GitHub Releases page are built by the release
+workflow from a `vX.Y.Z` tag that must match `VERSION`, and carry a GitHub
+build provenance attestation. Check one with
+`gh attestation verify unconventional-moves-X.Y.Z.zip --repo EauDoon/unconventional-moves`.
+The attestation ties the archive to this repository's workflow run at that
+tag; it does not certify content, safety, or approval.
 
 Structural tests check contracts and workflow behavior. They do not prove
 mechanism diversity or better decisions. See [behavioral evaluation](evals/README.md)
@@ -233,6 +253,8 @@ Ordinary tests remain offline.
 | [Plan validator](scripts/validate_plan.py) | Structural validation and limited lexical screening |
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
+| [Check runner](scripts/check.py) | The CI check set in one command |
+| [Release gate](scripts/versioning.py) | Reads `VERSION`, checks CHANGELOG, and gates tagged releases |
 | [Security](SECURITY.md) | Security scope and reporting guidance |
 | [Contributing](CONTRIBUTING.md) | Contribution and verification rules |
 | [Provenance](PROVENANCE.md) | Origin and independence disclosures |

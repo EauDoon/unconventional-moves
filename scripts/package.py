@@ -6,26 +6,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
-VERSION_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
-# Keep the version-derived archive name comfortably below common 255-byte
-# filename-component limits. The accepted grammar is ASCII-only.
-MAX_VERSION_LENGTH = 64
+try:
+    from .versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, VersionAction, read_version
+except ImportError:
+    from versioning import MAX_VERSION_LENGTH, VERSION_PATTERN, VersionAction, read_version
 
+__all__ = ["MAX_VERSION_LENGTH", "VERSION_PATTERN", "files_for", "main", "version_for"]
 
-def version_for(root: Path) -> str:
-    raw = (root / "VERSION").read_text(encoding="utf-8")
-    version = raw.removesuffix("\n")
-    if len(version) > MAX_VERSION_LENGTH or VERSION_PATTERN.fullmatch(version) is None:
-        raise ValueError(
-            f"VERSION must contain a semantic X.Y.Z version of at most {MAX_VERSION_LENGTH} characters"
-        )
-    return version
+# The archive name comes from VERSION through the shared reader.
+version_for = read_version
 
 
 def files_for(root: Path) -> list[Path]:
@@ -52,6 +46,7 @@ def files_for(root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     parser.add_argument("--output", type=Path, default=Path("dist"))
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):

@@ -12,15 +12,18 @@ import math
 import re
 import sys
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path
-from decimal import Decimal, localcontext
+from decimal import Decimal, Inexact, localcontext
 from datetime import date
 from urllib.parse import urlsplit
 
 try:
     from .validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from .versioning import VersionAction
 except ImportError:
     from validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from versioning import VersionAction
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -228,33 +231,74 @@ def evaluate_outcome(plan: dict, outcome: object) -> dict:
             "limitation": "Self-reported observations do not establish causation or general effectiveness. No result authorizes continuation or expansion."}
 
 
-def _decimal_precision(numbers: list[Decimal]) -> int:
-    """Enough significant digits to keep the parsed values exact.
+def _exact_precision(*numbers: Decimal) -> int:
+    """Significant digits that keep sums, differences, and products by 60 exact.
 
-    A fixed precision of 28 makes 10**500 - 10**1000 identical to 0 - 10**1000,
-    so the progress fraction becomes 1 while the exact target comparison says
-    the target was not met.
+    Each finite operand occupies digit positions from its exponent (lowest) to
+    exponent + digits - 1 (highest). The result needs the combined range of all
+    operands, not the widest single operand: with 28 digits, 2e-5 - 1e30 rounds
+    to -1e30, so a progress fraction displays 1 while the exact target
+    comparison says the target was not met. Four extra digits cover a carry and
+    the two digits of a factor of 60, and keep a quotient that is not exactly 1
+    distinguishable from 1.
     """
+    highs, lows = [], []
+    for number in numbers:
+        if not number.is_finite():
+            continue
+        _sign, digits, exponent = number.as_tuple()
+        highs.append(exponent + len(digits) - 1)
+        lows.append(exponent)
+    if not highs:
+        return 28
+    return max(28, max(highs) - min(lows) + 4)
+
+
+def _legacy_precision(*numbers: Decimal) -> int:
+    """The progress precision of 0.2.0: at least 28 digits, and at least each
+    finite operand's digit count plus the size of its exponent."""
     precision = 28
     for number in numbers:
-        _sign, digits, exponent = number.as_tuple()
-        if not isinstance(exponent, int):
-            continue
-        span = len(digits) + (exponent if exponent >= 0 else -exponent)
-        precision = max(precision, span)
+        if number.is_finite():
+            _sign, digits, exponent = number.as_tuple()
+            precision = max(precision, len(digits) + abs(exponent))
     return precision
+
+
+def _working_precision(legacy: int, operands: tuple[Decimal, ...], steps: Callable[[], object]) -> int:
+    """The precision 0.2.0 used, widened only where it rounds an exact step.
+
+    verify-handoff recomputes every derived string and requires an exact match,
+    so an inexact quotient must keep the precision it was first written with.
+    When that precision rounds a difference or product in steps(), the earlier
+    output was wrong, and the combined range of the operands is used instead.
+    """
+    with localcontext() as context:
+        context.prec = legacy
+        context.clear_flags()
+        steps()
+        if not context.flags[Inexact]:
+            return legacy
+    return max(legacy, _exact_precision(*operands))
 
 
 def measurement_context(experiment: dict, observed: int | float | None) -> dict:
     result = {key: experiment[key] for key in ("metric", "baseline", "target", "direction")}
     result.update(observed_value=observed, change_from_baseline=None, progress_fraction=None)
     if observed is not None:
-        baseline, target, value = (Decimal(str(number)) for number in
-                                   (experiment["baseline"], experiment["target"], observed))
+        operands = tuple(Decimal(str(number)) for number in (experiment["baseline"], experiment["target"], observed))
+        baseline, target, value = operands
         with localcontext() as context:
-            context.prec = _decimal_precision([baseline, target, value])
-            result["change_from_baseline"] = str(value - baseline)
-            result["progress_fraction"] = str((value - baseline) / (target - baseline))
+            context.prec = _working_precision(_legacy_precision(*operands), operands,
+                                              lambda: (value - baseline, target - baseline))
+            change, span = value - baseline, target - baseline
+            fraction = change / span
+            if fraction == 1 and change != span:
+                # A rounded quotient must not claim that the observed value is the target.
+                context.prec = max(context.prec, _exact_precision(*operands))
+                fraction = change / span
+            result["change_from_baseline"] = str(change)
+            result["progress_fraction"] = str(fraction)
     return result
 
 
@@ -295,9 +339,12 @@ def compare_plans(before: dict, after: dict) -> dict:
                 triggers.append({"move_id": move["move_id"], "field": field, "reason": reason})
     for move_id in sorted(old.keys() ^ new.keys()):
         triggers.append({"move_id": move_id, "field": "move", "reason": "move_added_or_removed"})
+    # A reorder is a change in the relative order of moves kept in both
+    # revisions. Adding or removing a move is reported separately above.
+    move_order_changed = [move_id for move_id in old if move_id in new] != [move_id for move_id in new if move_id in old]
     return {"before_sha256": plan_digest(before), "after_sha256": plan_digest(after),
             "added_move_ids": sorted(new.keys() - old.keys()), "removed_move_ids": sorted(old.keys() - new.keys()),
-            "move_order_changed": list(old) != list(new), "changed_moves": changed, "metadata_changes": metadata,
+            "move_order_changed": move_order_changed, "changed_moves": changed, "metadata_changes": metadata,
             "review_triggers": triggers, "observation_binding_changed": plan_digest(before) != plan_digest(after),
             "limitation": "A changed plan needs renewed review. Differences do not establish improvement."}
 
@@ -451,13 +498,33 @@ def screen_moves(plan: dict, max_minutes: int, exposure: str,
 
 
 def iso_date(value: str) -> date:
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+    # ASCII digits only: in a str pattern, \d also matches other Unicode digits.
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
         raise ValueError("date must use YYYY-MM-DD")
     return date.fromisoformat(value)
 
 
+def bounded_int(low: int, high: int):
+    """argparse type for an ASCII integer within inclusive bounds (exit code 2)."""
+    def parse(value: str) -> int:
+        if re.fullmatch(r"[+-]?[0-9]+", value) is None or not low <= int(value) <= high:
+            raise argparse.ArgumentTypeError(f"must be an integer from {low} to {high}")
+        return int(value)
+    parse.__name__ = "integer"
+    return parse
+
+
+def iso_date_argument(value: str) -> str:
+    """argparse type for a real YYYY-MM-DD date, kept as the original string."""
+    try:
+        iso_date(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a real date in YYYY-MM-DD form") from None
+    return value
+
+
 def _citation_url_key(value: str) -> str:
-    """Group citations that differ only by fragment, host case, or default port."""
+    """Group citations that differ only by fragment, host case, default port, or an empty path."""
     parsed = urlsplit(value)
     hostname = parsed.hostname
     if not hostname:
@@ -469,7 +536,9 @@ def _citation_url_key(value: str) -> str:
         port = None
     bracketed = f"[{host}]" if ":" in host else host
     netloc = bracketed if port is None else f"{bracketed}:{port}"
-    return parsed._replace(scheme=scheme, netloc=netloc, fragment="").geturl()
+    # For http(s), a bare host names the same resource as the host plus "/".
+    path = "/" if scheme in {"http", "https"} and not parsed.path else parsed.path
+    return parsed._replace(scheme=scheme, netloc=netloc, path=path, fragment="").geturl()
 
 
 def audit_sources(plan: dict, as_of: str, max_age_days: int) -> dict:
@@ -514,16 +583,24 @@ def review_timeline(plan: dict, observations: object) -> dict:
         hours, minutes = observation["elapsed_hours"], observation["active_minutes"]
         if hours <= previous_hours or minutes < previous_minutes:
             raise ValueError("timeline requires increasing elapsed hours and nondecreasing cumulative active minutes")
-        if index > 1 and Decimal(str(minutes)) - Decimal(str(previous_minutes)) > (Decimal(str(hours)) - Decimal(str(previous_hours))) * 60:
-            raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
+        elapsed, active = Decimal(str(hours)), Decimal(str(minutes))
+        # The first interval starts at zero; later ones at the previous checkpoint.
+        start_hours, start_minutes = Decimal(str(max(0, previous_hours))), Decimal(str(max(0, previous_minutes)))
+        with localcontext() as context:
+            # 0.2.0 computed checkpoint intervals at 28 digits.
+            context.prec = _working_precision(28, (elapsed, active, start_hours, start_minutes, Decimal(60)),
+                                              lambda: ((elapsed - start_hours) * 60, active - start_minutes))
+            interval_hours = elapsed - start_hours
+            interval_minutes = active - start_minutes
+            if index > 1 and interval_minutes > interval_hours * 60:
+                raise ValueError("checkpoint active-time increase exceeds the elapsed interval")
+            fraction = str(interval_minutes / (interval_hours * 60)) if interval_hours else None
         stop_reasons.update(review["reasons"])
         if stop_reasons and first_stop is None:
             first_stop = index
-        interval_hours = Decimal(str(hours)) - Decimal(str(max(0, previous_hours)))
-        interval_minutes = Decimal(str(minutes)) - Decimal(str(max(0, previous_minutes)))
         checkpoints.append({"checkpoint": index, "elapsed_hours": hours, "active_minutes": minutes,
                             "interval_hours": str(interval_hours), "interval_active_minutes": str(interval_minutes),
-                            "interval_activity_fraction": str(interval_minutes / (interval_hours * 60)) if interval_hours else None,
+                            "interval_activity_fraction": fraction,
                             "review": review, "after_stop": first_stop is not None and index > first_stop})
         previous_hours, previous_minutes = hours, minutes
     measured = [row for row in checkpoints if row["review"]["target_met"] is not None]
@@ -632,9 +709,12 @@ def review_limits(plan: dict, observations: object) -> dict:
     bounds = {}
     for reported, declared in (("elapsed_hours", "duration_hours"), ("active_minutes", "max_minutes")):
         consumed, maximum = Decimal(str(latest[reported])), Decimal(str(experiment[declared]))
+        with localcontext() as context:
+            context.prec = _exact_precision(consumed, maximum)
+            remaining = str(max(Decimal(0), maximum - consumed))
+            overrun = str(max(Decimal(0), consumed - maximum))
         bounds[reported] = {"declared_limit": experiment[declared], "reported": latest[reported],
-                            "remaining": str(max(Decimal(0), maximum - consumed)),
-                            "overrun": str(max(Decimal(0), consumed - maximum)),
+                            "remaining": remaining, "overrun": overrun,
                             "limit_reached": consumed >= maximum}
     return {"plan_sha256": timeline["plan_sha256"], "move_id": timeline["move_id"], "bounds": bounds,
             "decision": timeline["decision"], "reasons": timeline["reasons"],
@@ -677,8 +757,21 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     return revised
 
 
+class InputUnavailable(Exception):
+    """An input file could not be opened, read, or decoded as UTF-8."""
+
+
+def _read_input(reader, path: Path):
+    """Separate input failures from output failures in CLI diagnostics."""
+    try:
+        return reader(path)
+    except (OSError, UnicodeError) as exc:
+        raise InputUnavailable from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action=VersionAction)
     commands = parser.add_subparsers(dest="command", required=True)
     debrief = commands.add_parser("debrief", help="Render observations, stop history, and learning questions as inert Markdown")
     debrief.add_argument("plan", type=Path)
@@ -715,15 +808,15 @@ def main(argv: list[str] | None = None) -> int:
     limits.add_argument("--output", type=Path)
     sources = commands.add_parser("sources", help="Audit declared source dates without network access")
     sources.add_argument("plan", type=Path)
-    sources.add_argument("--as-of", required=True)
-    sources.add_argument("--max-age-days", type=int, required=True)
+    sources.add_argument("--as-of", type=iso_date_argument, required=True)
+    sources.add_argument("--max-age-days", type=bounded_int(0, 36500), required=True)
     sources.add_argument("--output", type=Path)
     screen = commands.add_parser("screen", help="Shortlist declared bounds without ranking or selecting moves")
     screen.add_argument("plan", type=Path)
-    screen.add_argument("--max-minutes", type=int, required=True)
+    screen.add_argument("--max-minutes", type=bounded_int(1, 2880), required=True)
     screen.add_argument("--exposure", choices=["self_only", "consenting_participants"], required=True)
-    screen.add_argument("--max-start-hours", type=int)
-    screen.add_argument("--max-duration-hours", type=int)
+    screen.add_argument("--max-start-hours", type=bounded_int(0, 48))
+    screen.add_argument("--max-duration-hours", type=bounded_int(1, 48))
     screen.add_argument("--output", type=Path)
     handoff = commands.add_parser("handoff", help="Bundle the plan and derived review for offline handoff")
     handoff.add_argument("plan", type=Path)
@@ -757,73 +850,87 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("after", type=Path)
     compare.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+
+    def plan_input(path: Path) -> dict:
+        return _read_input(read_plan, path)
+
+    def json_input(path: Path) -> object:
+        return _read_input(read_json_file, path)
+
     try:
         if args.command == "debrief":
-            emit(render_debrief(read_plan(args.plan), read_json_file(args.observations)), args.output)
+            emit(render_debrief(plan_input(args.plan), json_input(args.observations)), args.output)
         elif args.command == "table":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(portfolio_csv(plan) if args.format == "csv" else json.dumps(portfolio_rows(plan), indent=2) + "\n", args.output)
         elif args.command == "record":
-            result = append_checkpoint(read_plan(args.plan), read_json_file(args.observation),
-                                       read_json_file(args.history) if args.history else [])
+            result = append_checkpoint(plan_input(args.plan), json_input(args.observation),
+                                       json_input(args.history) if args.history else [])
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "init":
-            plan = read_plan(ROOT / "examples/bounded-plan.json")
+            plan = plan_input(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
         elif args.command == "handoff":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             if args.timeline:
-                result = timeline_handoff(plan, read_json_file(args.timeline))
+                result = timeline_handoff(plan, json_input(args.timeline))
             else:
-                observation = read_json_file(args.observation) if args.observation else None
+                observation = json_input(args.observation) if args.observation else None
                 if args.observation and not isinstance(observation, dict):
                     raise ValueError("supplied observation must be an object; omit --observation for a plan-only handoff")
                 result = handoff_bundle(plan, observation)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
-            emit(json.dumps(verify_handoff(read_json_file(args.bundle)), indent=2) + "\n", args.output)
+            emit(json.dumps(verify_handoff(json_input(args.bundle)), indent=2) + "\n", args.output)
         elif args.command == "unpack-handoff":
-            result = unpack_handoff(read_json_file(args.bundle), args.output_dir)
+            result = unpack_handoff(json_input(args.bundle), args.output_dir)
             emit(json.dumps(result, indent=2) + "\n", None)
         elif args.command == "screen":
-            result = screen_moves(read_plan(args.plan), args.max_minutes, args.exposure,
+            result = screen_moves(plan_input(args.plan), args.max_minutes, args.exposure,
                                   args.max_start_hours, args.max_duration_hours)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "sources":
-            result = audit_sources(read_plan(args.plan), args.as_of, args.max_age_days)
+            result = audit_sources(plan_input(args.plan), args.as_of, args.max_age_days)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "limits":
-            result = review_limits(read_plan(args.plan), read_json_file(args.observations))
+            result = review_limits(plan_input(args.plan), json_input(args.observations))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "timeline":
-            plan, observations = read_plan(args.plan), read_json_file(args.observations)
+            plan, observations = plan_input(args.plan), json_input(args.observations)
             content = timeline_csv(plan, observations) if args.format == "csv" else json.dumps(
                 review_timeline(plan, observations), indent=2) + "\n"
             emit(content, args.output)
         elif args.command == "observation-draft":
-            emit(json.dumps(observation_draft(read_plan(args.plan)), indent=2) + "\n", args.output)
+            emit(json.dumps(observation_draft(plan_input(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "select":
-            result = select_plan(read_plan(args.plan), args.move_id, args.reason, args.first_step)
+            result = select_plan(plan_input(args.plan), args.move_id, args.reason, args.first_step)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "review":
-            emit(json.dumps(review_plan(read_plan(args.plan)), indent=2) + "\n", args.output)
+            emit(json.dumps(review_plan(plan_input(args.plan)), indent=2) + "\n", args.output)
         elif args.command == "render":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(render_html(plan) if args.format == "html" else render_plan(plan), args.output)
         elif args.command == "card":
-            plan = read_plan(args.plan)
+            plan = plan_input(args.plan)
             emit(render_card(plan) if args.format == "markdown" else json.dumps(experiment_card(plan), indent=2) + "\n", args.output)
         elif args.command == "outcome":
-            result = evaluate_outcome(read_plan(args.plan), read_json_file(args.observation))
+            result = evaluate_outcome(plan_input(args.plan), json_input(args.observation))
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "compare":
-            result = compare_plans(read_plan(args.before), read_plan(args.after))
+            result = compare_plans(plan_input(args.before), plan_input(args.after))
             emit(json.dumps(result, indent=2) + "\n", args.output)
+    except InputUnavailable:
+        print("FAIL input file is unavailable or not UTF-8", file=sys.stderr)
+        return 1
     except FileExistsError:
         print("FAIL output already exists; choose a new path", file=sys.stderr)
         return 1
-    except (OSError, UnicodeError):
-        print("FAIL input or output file is unavailable or not UTF-8", file=sys.stderr)
+    except OSError:
+        # Every input read is wrapped above, so this is the report destination.
+        print("FAIL output could not be created; choose a writable new path", file=sys.stderr)
+        return 1
+    except UnicodeError:
+        print("FAIL output text could not be encoded as UTF-8", file=sys.stderr)
         return 1
     except json.JSONDecodeError:
         print("FAIL invalid JSON", file=sys.stderr)

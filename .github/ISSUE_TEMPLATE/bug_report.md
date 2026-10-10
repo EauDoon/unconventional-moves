@@ -26,7 +26,15 @@ What happens. Include error text, stack trace, or logs.
 
 ## Environment
 
-Repo, commit or tag, OS, runtime version, relevant inputs.
+- Output of `python scripts/moves.py --version`:
+- Commit or tag, when running from a checkout:
+- Operating system:
+- Python version (`python --version`):
+
+## Command and exit code
+
+The exact command you ran and its exit code. Use synthetic inputs only, and
+redact any personal or account data.
 
 ## Severity
 

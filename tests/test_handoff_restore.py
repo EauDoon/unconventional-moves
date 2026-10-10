@@ -89,6 +89,28 @@ class HandoffRestoreTests(unittest.TestCase):
             self.assertTrue(report['human_review_required'])
             self.assertIsNone(report['first_stop_checkpoint'])
 
+    def test_bundles_with_earlier_progress_strings_verify_and_unpack(self):
+        # 0.2.0 wrote this 34-digit progress fraction into both handoff
+        # versions. verify-handoff recomputes it, so the digits must not change.
+        progress = '0.04285714285714286285714285714285714'
+        moves.selected_move(self.plan)['experiment'].update(baseline=0, target=7)
+        observation = {**self.history[1], 'plan_sha256': moves.plan_digest(self.plan), 'observed_value': 0.1 + 0.2}
+        bundles = {'v0.1': moves.handoff_bundle(self.plan, observation),
+                   'v0.2': moves.timeline_handoff(self.plan, [observation])}
+        self.assertEqual(bundles['v0.1']['outcome_review']['measurement']['progress_fraction'], progress)
+        self.assertEqual(bundles['v0.2']['timeline_review']['checkpoints'][0]['review']['measurement']['progress_fraction'],
+                         progress)
+        with tempfile.TemporaryDirectory() as td:
+            for name, bundle in bundles.items():
+                with self.subTest(contract=name):
+                    path, restored = Path(td) / f'{name}.json', Path(td) / f'{name}-restored'
+                    path.write_text(json.dumps(bundle, indent=2) + '\n', encoding='utf-8')
+                    verified = self.run_cli('verify-handoff', path)
+                    self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+                    unpacked = self.run_cli('unpack-handoff', path, '--output-dir', restored)
+                    self.assertEqual(unpacked.returncode, 0, unpacked.stdout + unpacked.stderr)
+                    self.assertEqual(moves.read_json_file(restored / 'checkpoints.json'), [observation])
+
     def test_invalid_bundles_create_no_directory(self):
         bundle = moves.timeline_handoff(self.plan, self.history)
         bad_cases = [None, [], {}, copy.deepcopy(moves.handoff_bundle(self.plan))]

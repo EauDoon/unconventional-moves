@@ -1,11 +1,3 @@
----
-name: Pull Request
-about: Open a change for review
-title: ""
-labels: ""
-assignees: ""
----
-
 ## Description
 
 What does this PR do and why?
@@ -20,9 +12,8 @@ How did you verify this? Commands run, scenarios exercised, evidence captured.
 
 ## Checklist
 
-- [ ] Branch name follows the repo convention
-- [ ] No edits to main
-- [ ] No edits to LICENSE, CODEOWNERS, CHANGELOG, SECURITY, CONTRIBUTING
-- [ ] No edits to existing CI workflows
-- [ ] Linked issue or rationale included
-- [ ] Validation commands and outputs attached or referenced
+- [ ] `python scripts/check.py` passed; its summary is pasted above
+- [ ] A CHANGELOG entry is added under `[Unreleased]`
+- [ ] `package-manifest.json` and the bundled skill references are updated together
+- [ ] No personal, employer, client, or account data, and no em or en dashes
+- [ ] No tuning on held-out cases; a skill text change notes that the recorded probe needs a new evaluation

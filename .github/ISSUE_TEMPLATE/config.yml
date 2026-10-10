@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security concern privately
+    url: https://github.com/EauDoon/unconventional-moves/security/policy
+    about: Read the security policy for the private reporting route; please do not describe a security concern in a public issue.
