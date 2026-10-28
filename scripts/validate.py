@@ -216,7 +216,15 @@ class Checker:
     def read(self, relative: str) -> str:
         path = self.root / relative
         self.ok(path.is_file(), f"file exists: {relative}")
-        return path.read_text(encoding="utf-8") if path.is_file() else ""
+        if not path.is_file():
+            return ""
+        try:
+            return path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            # A file that is not UTF-8 is a reported failure, not a traceback.
+            # The Markdown link check already reports this condition.
+            self.ok(False, f"file is UTF-8: {relative}")
+            return ""
 
     def json_file(self, relative: str) -> object:
         def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -227,13 +235,23 @@ class Checker:
                 result[key] = value
             return result
 
+        path = self.root / relative
+        self.ok(path.is_file(), f"file exists: {relative}")
         try:
-            value = json.loads(self.read(relative), object_pairs_hook=unique_object)
-            self.checks.append(f"valid JSON: {relative}")
-            return value
-        except (json.JSONDecodeError, OSError, ValueError) as exc:
+            text = path.read_bytes().decode("utf-8")
+        except UnicodeDecodeError:
+            self.failures.append(f"invalid JSON {relative}: file is not UTF-8")
+            return None
+        except OSError as exc:
             self.failures.append(f"invalid JSON {relative}: {exc}")
             return None
+        try:
+            value = json.loads(text, object_pairs_hook=unique_object)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self.failures.append(f"invalid JSON {relative}: {exc}")
+            return None
+        self.checks.append(f"valid JSON: {relative}")
+        return value
 
     def check_links(self) -> None:
         root_resolved = self.root.resolve()
