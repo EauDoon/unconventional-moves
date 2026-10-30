@@ -145,11 +145,12 @@ def check_case(case: dict, rubric_text: str) -> None:
     tags = case["tags"]
     if not isinstance(tags, list) or not tags:
         fail("tags must be a non-empty list")
-    if len(tags) != len(set(tags)):
-        fail("tags must be unique within a case")
+    # Check types before uniqueness: set() raises TypeError for a list or object tag.
     for tag in tags:
         if not isinstance(tag, str) or not tag:
             fail("each tag must be a non-empty string")
+    if len(tags) != len(set(tags)):
+        fail("tags must be unique within a case")
     bad_tags = {tag for tag in tags if not isinstance(tag, str) or not tag}
     if bad_tags:
         fail(f"malformed tag(s): {sorted(bad_tags)}")

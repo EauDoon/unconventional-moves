@@ -12,6 +12,9 @@ The root `VERSION` file is the single source of the package version, and
 ### Fixed
 
 - Report a checked file that is not UTF-8 as a failure instead of raising `UnicodeDecodeError`. `scripts/validate.py` decoded `SKILL.md`, `README.md`, `agents/openai.yaml`, `schemas/moves.schema.json`, and `examples/adversarial-fixtures.json` without an encoding guard, so a single non-UTF-8 byte ended the repository gate with a Python traceback instead of a diagnostic. The Markdown link check already reported this condition; the remaining read paths report it the same way and the run continues, so every other check still runs and reports.
+- Report repository JSON of an unexpected shape as a failure instead of raising. `scripts/validate.py` assumed the shapes of `schemas/moves.schema.json` and `examples/adversarial-fixtures.json`, so valid JSON such as an array-form `items` or a non-array `required` in the schema, a fixture case that is not an object, or a fixture ID that is not a string ended the repository gate with an `AttributeError` or `TypeError` traceback. These now fail the existing schema checks or a new `adversarial fixtures are objects with string IDs` check, and the run continues.
+- Report an eval fixture tag that is a list or an object as a case failure. `evals/runner.py` checked tag uniqueness with `set()` before checking tag types, so such a tag raised `TypeError` and stopped the runner with a traceback instead of printing `FAIL` for that case.
+- Point the release links at the end of this changelog at commits that exist. The `v0.1.0` and `v0.2.0` tags were never created, so the 0.1.0, 0.2.0, and 0.3.0 links returned 404. They now name the 0.1.0 release commit and the merge that first set `VERSION` to 0.2.0.
 
 ## [0.3.0] - 2026-10-09
 
@@ -100,6 +103,6 @@ This is the first release since 0.2.0. Archives built from `main` between 2026-0
 - Added deterministic packaging, checksums, CI, and installation guidance.
 
 [Unreleased]: https://github.com/EauDoon/unconventional-moves/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/EauDoon/unconventional-moves/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/EauDoon/unconventional-moves/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/EauDoon/unconventional-moves/releases/tag/v0.1.0
+[0.3.0]: https://github.com/EauDoon/unconventional-moves/compare/389dfc63ca09deeef85989a11db87e02b5327de5...v0.3.0
+[0.2.0]: https://github.com/EauDoon/unconventional-moves/compare/72566a4ef515578e912db454088c0c5f988f7968...389dfc63ca09deeef85989a11db87e02b5327de5
+[0.1.0]: https://github.com/EauDoon/unconventional-moves/tree/72566a4ef515578e912db454088c0c5f988f7968

@@ -201,6 +201,20 @@ def reference_link_targets(text: str):
             yield target, None
 
 
+def _member(value: object, *keys: str) -> object:
+    """Follow nested JSON object keys; a missing key or a non-object yields None."""
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
+def _strings(value: object) -> set[str]:
+    """The string items of a JSON array; any other value contributes nothing."""
+    return {item for item in value if isinstance(item, str)} if isinstance(value, list) else set()
+
+
 class Checker:
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -338,9 +352,10 @@ class Checker:
 
         schema = self.json_file("schemas/moves.schema.json")
         if isinstance(schema, dict):
-            required = set(schema.get("required", []))
+            # Valid JSON of an unexpected shape fails these checks instead of raising.
+            required = _strings(schema.get("required"))
             self.ok({"moves", "prioritized_action", "sources"}.issubset(required), "schema requires moves, one action, and sources")
-            move_required = set(schema.get("properties", {}).get("moves", {}).get("items", {}).get("required", []))
+            move_required = _strings(_member(schema, "properties", "moves", "items", "required"))
             self.ok({"success_signal", "stop_condition"}.issubset(move_required), "schema requires success signal and stop condition")
 
         for name in ("moves.schema.json", "moves-v0.2.schema.json"):
@@ -418,7 +433,9 @@ class Checker:
         fixtures = self.json_file("examples/adversarial-fixtures.json")
         if isinstance(fixtures, dict):
             cases = fixtures.get("cases", [])
-            ids = [case.get("id") for case in cases] if isinstance(cases, list) else []
+            ids = [_member(case, "id") for case in cases] if isinstance(cases, list) else []
+            self.ok(all(isinstance(case_id, str) for case_id in ids), "adversarial fixtures are objects with string IDs")
+            ids = [case_id for case_id in ids if isinstance(case_id, str)]
             expected = {"unsafe-goal", "third-party-effects", "high-stakes-source-fail-closed", "prompt-injection"}
             self.ok(expected.issubset(set(ids)), "adversarial fixtures cover four required behaviors")
             self.ok(len(ids) == len(set(ids)), "adversarial fixture IDs are unique")

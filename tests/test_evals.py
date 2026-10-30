@@ -287,6 +287,29 @@ class EvaluationFixtureTests(unittest.TestCase):
         self.assertIn("non-standard JSON constant", stdout.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue() + stdout.getvalue())
 
+    def test_runner_reports_unhashable_tags_as_a_case_failure(self):
+        # A list or object tag must be a reported case failure, not a TypeError
+        # raised while checking that tags are unique.
+        spec = importlib.util.spec_from_file_location("eval_runner_tags", ROOT / "evals" / "runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for tags in ([["unsafe_objective"]], [{"tag": "json_v01"}], ["json_v01", ["json_v01"]]):
+            with self.subTest(tags=tags):
+                with tempfile.TemporaryDirectory() as td:
+                    cases = Path(td) / "cases"
+                    shutil.copytree(ROOT / "evals" / "cases", cases)
+                    target = next(cases.glob("*.json"))
+                    case = json.loads(target.read_text(encoding="utf-8"))
+                    case["tags"] = tags
+                    target.write_text(json.dumps(case), encoding="utf-8")
+                    runner.CASES_DIR = cases
+                    stdout, stderr = io.StringIO(), io.StringIO()
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        code = runner.main()
+                self.assertEqual(code, 1)
+                self.assertIn(f"FAIL  {case['id']}  each tag must be a non-empty string", stdout.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue() + stdout.getvalue())
+
     def test_suite_shape_errors_use_exit_code_2(self):
         spec = importlib.util.spec_from_file_location("eval_runner_exit", ROOT / "evals" / "runner.py")
         runner = importlib.util.module_from_spec(spec)

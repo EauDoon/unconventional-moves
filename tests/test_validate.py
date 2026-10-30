@@ -346,6 +346,36 @@ class ValidateTests(unittest.TestCase):
             self.assertNotIn(b"Traceback", result.stderr)
             self.assertIn("file is UTF-8: README.md", stdout)
 
+    def test_malformed_repository_json_shapes_are_failures_not_exceptions(self) -> None:
+        # Valid JSON with an unexpected shape is reported, never raised as a traceback.
+        schema = json.loads((ROOT / "schemas/moves.schema.json").read_text(encoding="utf-8"))
+        fixtures = json.loads((ROOT / "examples/adversarial-fixtures.json").read_text(encoding="utf-8"))
+        array_items = json.loads(json.dumps(schema))
+        array_items["properties"]["moves"]["items"] = [array_items["properties"]["moves"]["items"]]
+        string_case = {**fixtures, "cases": [*fixtures["cases"], "prompt-injection"]}
+        array_id = {**fixtures, "cases": [{**fixtures["cases"][0], "id": ["unsafe-goal"]}, *fixtures["cases"][1:]]}
+        cases = {
+            "schema items as an array": (
+                "schemas/moves.schema.json", array_items, "schema requires success signal and stop condition"),
+            "schema required as a number": (
+                "schemas/moves.schema.json", {**schema, "required": 5}, "schema requires moves, one action, and sources"),
+            "fixture case as a string": (
+                "examples/adversarial-fixtures.json", string_case, "adversarial fixtures are objects with string IDs"),
+            "fixture ID as an array": (
+                "examples/adversarial-fixtures.json", array_id, "adversarial fixtures are objects with string IDs"),
+        }
+        for name, (relative, content, failure) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for source in ("schemas/moves.schema.json", "examples/adversarial-fixtures.json"):
+                    (root / source).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(ROOT / source, root / source)
+                (root / relative).write_text(json.dumps(content), encoding="utf-8")
+                checker = Checker(root)
+                checker.run()
+                self.assertIn(failure, checker.failures)
+                self.assertIn(f"valid JSON: {relative}", checker.checks)
+
     def test_link_outside_repository_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
