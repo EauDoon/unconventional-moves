@@ -9,6 +9,8 @@ The root `VERSION` file is the single source of the package version, and
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
 ### Added
 
 - Add `scripts/validate_response.py`, a structural checker for the skill's prose output. It checks five to seven `### Idea N: Title (mechanism)` blocks numbered from 1, the seven labeled fields in order with visible text, a Sources section after the ideas and before the end, and exactly one closing prioritized action paragraph with nothing after it. A Sources section is an ATX or setext heading of any level titled Sources, or a line that starts with a bold or plain Sources label, so a `**Sources:** ...` line attached to the final paragraph is reported as Sources after it instead of being read as part of the action. Every line Markdown renders inside a bullet joins its field, including unindented continuation lines and indented paragraphs after a blank line, and wrapped priority lines join that paragraph. Lines end only at LF, CRLF, or CR, so U+2028 and similar characters cannot split text out of a field. Fenced code is ignored, and a fence closes only on a run of its own character at least as long as the opening one. Matching takes time linear in the line length, so a long run of spaces cannot stall the check within the 1 MB bound, and the same lexical screen as the plan validator covers the action, test, signal, stop, and priority text. `--high-stakes` also requires Sources, `--json` prints a machine report, and a refusal or limitation is reported as not a completed plan. Exit 0 means a valid shape, 1 an invalid or unreadable file, 2 bad arguments. Until now only JSON output had a deterministic check, so a prose answer with Sources after the final action, the defect class fixed in 0.3.0, went unnoticed. All 12 revised completed responses in the recorded probe pass, and the two baseline responses with that defect fail on it. `examples/example-response.md` is the prose form of `examples/example-plan.json`, and `scripts/check.py` now runs eight checks, including this one on that example.
@@ -115,7 +117,8 @@ This is the first release since 0.2.0. Archives built from `main` between 2026-0
 - Added high-stakes Sources guidance, JSON schema mode, and a copy-ready worksheet.
 - Added deterministic packaging, checksums, CI, and installation guidance.
 
-[Unreleased]: https://github.com/EauDoon/unconventional-moves/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/EauDoon/unconventional-moves/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/EauDoon/unconventional-moves/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EauDoon/unconventional-moves/compare/389dfc63ca09deeef85989a11db87e02b5327de5...v0.3.0
 [0.2.0]: https://github.com/EauDoon/unconventional-moves/compare/72566a4ef515578e912db454088c0c5f988f7968...389dfc63ca09deeef85989a11db87e02b5327de5
 [0.1.0]: https://github.com/EauDoon/unconventional-moves/tree/72566a4ef515578e912db454088c0c5f988f7968
