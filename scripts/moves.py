@@ -19,10 +19,12 @@ from datetime import date
 from urllib.parse import urlsplit
 
 try:
-    from .validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from .validate_plan import MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_plan_data
+    from .validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from .versioning import VersionAction
 except ImportError:
-    from validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from validate_plan import MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_plan_data
+    from validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from versioning import VersionAction
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -757,6 +759,39 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     return revised
 
 
+# The seven labeled prose fields, in order, after id, title, and mechanism.
+RESPONSE_FIELDS = dict(zip(RESPONSE_LABELS, MOVE_FIELDS[3:]))
+
+
+def import_response(text: str, goal: str, high_stakes: bool = False, sources: object = None) -> dict:
+    """Transcribe a structurally valid prose response into a version 0.1 plan.
+
+    Field text is copied, never inferred or verified. The goal comes only from
+    the caller, and sources only from declared records: prose citations are
+    never parsed into source objects.
+    """
+    parsed = parse_response(text)
+    failures = check_response(parsed, high_stakes)
+    if failures:
+        raise ValueError("response is not a structurally valid completed plan: " + "; ".join(failures))
+    if parsed["sources_lines"] and sources is None:
+        raise ValueError("response has a Sources section; supply the declared records with --sources")
+    moves = []
+    for idea in parsed["ideas"]:
+        fields = idea_fields(idea)
+        moves.append({"id": f"move-{idea['number']:02d}", "title": idea["title"], "mechanism": idea["mechanism"],
+                      **{RESPONSE_FIELDS[label]: fields[label] for label in RESPONSE_LABELS}})
+    plan = {"contract_version": "unconventional-moves/v0.1", "goal": goal, "high_stakes": high_stakes,
+            "moves": moves, "prioritized_action": parsed["priorities"][0]["text"],
+            "sources": [] if sources is None else sources}
+    failures = validate_plan_data(plan)
+    if failures:
+        raise ValueError("imported plan is invalid: " + "; ".join(failures))
+    if len((json.dumps(plan, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("imported plan exceeds the supported JSON byte limit")
+    return plan
+
+
 class InputUnavailable(Exception):
     """An input file could not be opened, read, or decoded as UTF-8."""
 
@@ -788,6 +823,20 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
     init.add_argument("--output", type=Path, required=True)
+    imported = commands.add_parser(
+        "import-response", help="Transcribe a structurally valid prose response into a new v0.1 plan for review; "
+                                "nothing in it is verified",
+        description="Copy each idea's title, mechanism, and seven labeled fields into a new version 0.1 plan, "
+                    "with IDs move-01 onward. The response must pass the structural response check first. The "
+                    "plan is a transcription for review: no claim in it is verified, the goal comes only from "
+                    "--goal, and sources come only from --sources, never from prose citations.")
+    imported.add_argument("response", type=Path, help="the saved Markdown response")
+    imported.add_argument("--goal", required=True, help="the plan goal in your words; it is never inferred from the response")
+    imported.add_argument("--high-stakes", action="store_true",
+                          help="mark the plan high stakes; the response then needs a Sources section and --sources")
+    imported.add_argument("--sources", type=Path, metavar="SOURCES.json",
+                          help="a JSON array of declared source records; required when the response has a Sources section")
+    imported.add_argument("--output", type=Path, required=True)
     select = commands.add_parser("select", help="Record a declared selection and first step in a new revision; no approval is established")
     select.add_argument("plan", type=Path)
     select.add_argument("--move-id", required=True)
@@ -870,6 +919,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "init":
             plan = plan_input(ROOT / "examples/bounded-plan.json")
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "import-response":
+            text = _read_input(read_response_file, args.response)
+            declared = json_input(args.sources) if args.sources else None
+            emit(json.dumps(import_response(text, args.goal, args.high_stakes, declared), indent=2) + "\n", args.output)
         elif args.command == "handoff":
             plan = plan_input(args.plan)
             if args.timeline:

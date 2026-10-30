@@ -23,6 +23,19 @@ The initial draft is a complete synthetic language-practice example. Replace its
 
 Version 0.1 remains supported. See the [experiment contract](experiment-contract.md) for the additive version 0.2 fields.
 
+## Import a skill response
+
+The skill answers in prose by default. To track a real answer instead of the synthetic example, save the response as UTF-8 Markdown and transcribe it:
+
+```sh
+python scripts/validate_response.py response.md
+python scripts/moves.py import-response response.md --goal "Your goal in your words" --output plan.json
+```
+
+`import-response` first applies the structural response check and refuses (exit 1, no file) unless the response is a valid completed plan: a refusal, a limitation, Sources after the final action, or a missing field is reported instead of imported. Idea N becomes move ID `move-NN`; the heading text before the parenthesis is the title and the parenthesis is the mechanism; the seven labeled fields map to `concrete_move`, `why_overlooked`, `test_48h`, `success_signal`, `stop_condition`, `evidence_status`, and `bounds`; the final paragraph becomes `prioritized_action`. Wrapped lines join with single spaces and text is otherwise copied verbatim. Extra labeled bullets are not imported.
+
+The goal comes only from `--goal`, never from the framing. Sources are never parsed from prose: a response with a Sources section needs `--sources sources.json`, a JSON array of declared source records with `title`, `url`, and `supports`. `--high-stakes` marks the plan high stakes, which requires a Sources section in the response and at least one declared record. The result is an ordinary v0.1 plan that must pass the plan validator, and it is written only to a new file. It is a transcription for review: no claim, source, or bound in it is verified. Use `review`, `render`, and `sources` on it, or add measured experiments and promote it to v0.2 once you have real baselines.
+
 ## Review the portfolio
 
 ```sh

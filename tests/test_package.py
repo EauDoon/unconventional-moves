@@ -102,6 +102,8 @@ class PackageTests(unittest.TestCase):
             for args in (["scripts/validate.py"],
                          ["evals/runner.py"],
                          ["scripts/validate_response.py", "examples/example-response.md"],
+                         ["scripts/moves.py", "import-response", "examples/example-response.md",
+                          "--goal", "Synthetic extracted import.", "--output", str(root / "imported.json")],
                          ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
                           "--output-dir", str(root / "shim-restored")],
                          ["scripts/moves.py", "render", "examples/example-plan.json"],

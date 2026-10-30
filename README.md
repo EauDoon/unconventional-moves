@@ -142,7 +142,13 @@ returns `stop_and_review` because its bounds are reached. If the destination
 files exist, use new filenames; report commands refuse overwrites.
 
 For your own plan, replace the synthetic content, select one move, and create
-new observation records bound to that plan revision. Follow the complete
+new observation records bound to that plan revision. To start from a skill
+answer instead, save the prose response and run
+`python scripts/moves.py import-response response.md --goal "Your goal" --output plan.json`.
+It copies each idea's title, mechanism, and seven fields into a version 0.1
+plan only when the response passes the structural check, takes the goal only
+from `--goal` and sources only from a `--sources` JSON array, and verifies
+nothing. Follow the complete
 [local workflow](docs/local-workflow.md) and [experiment contract](docs/experiment-contract.md)
 for selection, checkpoints, history, handoffs, comparisons, and exports.
 
@@ -184,6 +190,9 @@ and a `sources` array. Version 0.2 adds a selected move ID and measurable
 experiment cards. The first choice in the recommendation must agree with the
 selected ID; free-text meaning still needs human review.
 
+A prose response converts to a v0.1 plan with `moves.py import-response`,
+because prose carries no numeric experiment fields.
+
 Use v0.1 when meaningful numeric baselines are unknown, and identify what needs
 measuring. Do not invent numbers to force v0.2. Version 0.2 retains a start bound
 of 0 to 48 hours and duration of 1 to 48 hours. Test a narrow uncertainty within
@@ -193,10 +202,11 @@ The installed skill bundles both schemas and its strategy review reference.
 ## Integration notes
 
 For concrete offline workflows using the bundled examples, see
-[usage recipes](docs/usage-recipes.md); five copy-paste recipes cover v0.1
+[usage recipes](docs/usage-recipes.md); six copy-paste recipes cover v0.1
 rendering, v0.2 selection and cards, the synthetic outcome replay,
-cumulative checkpoint histories with CSV export, and the combined
-constraint shortlist and source date audit. To choose between the two
+cumulative checkpoint histories with CSV export, the combined
+constraint shortlist and source date audit, and importing a prose response
+as a plan. To choose between the two
 schema versions using the actual required fields, the experiment card
 bounds, and the CLI version gate, see the
 [version decision tree](docs/version-decision.md). Both docs rely only on

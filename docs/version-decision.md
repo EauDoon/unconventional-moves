@@ -68,8 +68,9 @@ before `moves.py` runs. Optional flags may precede that path.
 - Commands that accept either version: `render`, `review`, `sources`.
 - `compare` takes two plans, so it is gated by plan validation in
   `moves.py` rather than by the shim, and it works on either version.
-- Commands with no plan argument: `init`, `verify-handoff`,
-  `unpack-handoff`.
+- Commands with no plan argument: `init`, `import-response`,
+  `verify-handoff`, `unpack-handoff`. `import-response` reads a prose
+  response and always writes a v0.1 plan.
 
 The shim also refuses any `contract_version` outside the two supported
 strings. Unknown versions do not pass through to `moves.py`.
@@ -81,6 +82,9 @@ strings. Unknown versions do not pass through to `moves.py`.
   metric and target are unverified declarations, not measured evidence.
 - You only need a free-text plan, a Markdown or HTML render, a review
   report, or a source date audit. Those three commands accept v0.1.
+- You are starting from a prose skill response. `import-response`
+  transcribes it into a v0.1 plan, because prose carries no numeric
+  experiment fields.
 - The plan is high stakes and the only sources you can supply are
   declared, not verified. v0.2 would not improve the source situation
   and adds no new source field.

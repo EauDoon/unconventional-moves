@@ -16,8 +16,10 @@ Rules:
 - plan-required commands, using the first positional plan path:
   v0.2-only commands on a v0.1 plan are refused with exit 1.
   shared commands pass through to moves.main() unchanged.
-  Optional flags may precede the plan; every moves.py option takes a value.
-- plan-less commands (init, verify-handoff, unpack-handoff): pass through directly.
+  Optional flags may precede the plan; every option of a version-gated
+  command takes a value.
+- plan-less commands (init, import-response, verify-handoff, unpack-handoff):
+  pass through directly.
 - unknown contract_version: refused with exit 1.
 - no argv: delegated so argparse prints its usage.
 """
@@ -56,7 +58,7 @@ SHARED_COMMANDS = frozenset({
 # validation in moves.py rather than here and works on either version.
 
 # Commands that take no plan argument and skip version detection.
-NO_PLAN_COMMANDS = frozenset({"init", "verify-handoff", "unpack-handoff"})
+NO_PLAN_COMMANDS = frozenset({"init", "import-response", "verify-handoff", "unpack-handoff"})
 
 
 def detect_version(plan_path: Path) -> str | None:
@@ -79,9 +81,10 @@ def detect_version(plan_path: Path) -> str | None:
 def plan_argument(argv: list[str]) -> str | None:
     """Return the first positional argument.
 
-    argparse accepts options before the plan path. Every option in moves.py
-    takes one value, including the ``--name=value`` form. Treating argv[1]
-    as the plan skips the version gate whenever a flag comes first.
+    argparse accepts options before the plan path. Every option of a
+    version-gated command takes one value, including the ``--name=value``
+    form; boolean options exist only on commands that skip the gate. Treating
+    argv[1] as the plan skips the version gate whenever a flag comes first.
     """
     index = 1
     while index < len(argv):

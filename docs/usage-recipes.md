@@ -1,8 +1,9 @@
 # Usage recipes
 
-Five copy-paste recipes that exercise the actual offline CLI. They use only
+Six copy-paste recipes that exercise the actual offline CLI. They use only
 files and commands that ship in this repository: `examples/example-plan.json`
-is a v0.1 plan, `examples/bounded-plan.json` is a v0.2 bounded plan, and
+is a v0.1 plan, `examples/example-response.md` is the same plan written as a
+prose skill response, `examples/bounded-plan.json` is a v0.2 bounded plan, and
 `examples/bounded-outcome.json` is a synthetic outcome bound to its plan
 revision. Every recipe calls `python scripts/moves.py <command>` directly,
 with flags that exist in `scripts/moves.py`. `scripts/moves_cli.py` accepts
@@ -153,3 +154,25 @@ and flags an out-of-scope selected move without replacing it.
 dates; dates within the threshold are not verified current sources.
 Publisher identity, content, relevance, and high-stakes suitability still
 need human review.
+
+## Recipe 6: Import a prose skill response as a v0.1 plan
+
+The skill answers in prose by default. Check the saved response's structure,
+then transcribe it into a v0.1 plan for the other commands. The goal is
+always yours: `import-response` never infers it from the framing.
+
+```sh
+python scripts/validate_response.py examples/example-response.md
+python scripts/moves.py import-response examples/example-response.md \
+    --goal "Make practice consistent during a fictional irregular week." \
+    --output imported.json
+python scripts/moves.py review imported.json --output imported-review.json
+python scripts/moves.py render imported.json --output imported.md
+```
+
+The response passes only the structural check; its content is unverified.
+`imported.json` has IDs `move-01` to `move-05` and is identical to
+`examples/example-plan.json`, because that example response is its prose form.
+A response with a Sources section needs `--sources` with a JSON array of
+declared source records, and `--high-stakes` needs at least one. Prose
+citations are never parsed into sources. The input response is unchanged.
