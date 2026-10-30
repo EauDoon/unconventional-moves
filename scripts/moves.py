@@ -19,10 +19,14 @@ from datetime import date
 from urllib.parse import urlsplit
 
 try:
-    from .validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from .validate_plan import (MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_experiment,
+                                validate_plan_data)
+    from .validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from .versioning import VersionAction
 except ImportError:
-    from validate_plan import MAX_PLAN_BYTES, has_visible_text, read_json_file, validate_plan_data
+    from validate_plan import (MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_experiment,
+                               validate_plan_data)
+    from validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from versioning import VersionAction
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -358,14 +362,97 @@ def handoff_bundle(plan: dict, observation: object = None) -> dict:
     return bundle
 
 
+class HandoffMismatch(ValueError):
+    """A handoff whose stored digest or derived fields differ from a recomputation.
+
+    ``mismatches`` lists every differing leaf as path, change (changed,
+    missing, or unexpected), the bundle value, and the recomputed value.
+    """
+
+    def __init__(self, message: str, mismatches: list[dict]):
+        super().__init__(message)
+        self.mismatches = mismatches
+
+
+MISMATCH_PATHS_SHOWN = 5
+
+
+def _same_json(left: object, right: object) -> bool:
+    # The serialization the whole-bundle comparison uses: 1 and 1.0 differ.
+    return json.dumps(left, sort_keys=True, allow_nan=False) == json.dumps(right, sort_keys=True, allow_nan=False)
+
+
+def _path_segment(key: str) -> str:
+    return "." + key if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) else "[" + json.dumps(key) + "]"
+
+
+def handoff_differences(bundle: object, expected: object, path: str = "") -> list[dict]:
+    """Every differing leaf between a stored bundle and its recomputation, in a stable order."""
+    if isinstance(bundle, dict) and isinstance(expected, dict):
+        found = []
+        for key in sorted(bundle.keys() | expected.keys()):
+            child = (path + _path_segment(key)).lstrip(".")
+            if key not in bundle:
+                found.append({"path": child, "change": "missing", "recomputed": expected[key]})
+            elif key not in expected:
+                found.append({"path": child, "change": "unexpected", "bundle": bundle[key]})
+            else:
+                found.extend(handoff_differences(bundle[key], expected[key], child))
+        return found
+    if isinstance(bundle, list) and isinstance(expected, list):
+        found = []
+        for index in range(max(len(bundle), len(expected))):
+            child = f"{path}[{index}]"
+            if index >= len(bundle):
+                found.append({"path": child, "change": "missing", "recomputed": expected[index]})
+            elif index >= len(expected):
+                found.append({"path": child, "change": "unexpected", "bundle": bundle[index]})
+            else:
+                found.extend(handoff_differences(bundle[index], expected[index], child))
+        return found
+    if _same_json(bundle, expected):
+        return []
+    return [{"path": path or "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
+
+
+def _mismatch(prefix: str, bundle: dict, expected: dict) -> HandoffMismatch:
+    found = handoff_differences(bundle, expected) or [
+        {"path": "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
+    shown = ", ".join(item["path"] for item in found[:MISMATCH_PATHS_SHOWN])
+    more = len(found) - MISMATCH_PATHS_SHOWN
+    return HandoffMismatch(prefix + ": " + shown + (f" and {more} more" if more > 0 else ""), found)
+
+
+def _check_plan_digest(bundle: dict) -> None:
+    recomputed = plan_digest(bundle["plan"])
+    if bundle["plan_sha256"] != recomputed:
+        raise HandoffMismatch("handoff plan was changed after the bundle was written: plan_sha256 does not match the plan",
+                              [{"path": "plan_sha256", "change": "changed", "bundle": bundle["plan_sha256"],
+                                "recomputed": recomputed}])
+
+
+def mismatch_report(bundle: dict, mismatch: HandoffMismatch) -> dict:
+    return {"consistent": False, "contract_version": bundle.get("contract_version"), "failure": str(mismatch),
+            "mismatches": mismatch.mismatches,
+            "regenerate": "Rebuild with handoff from the source plan and observations; do not edit records.",
+            "limitation": "Paths name where the stored bundle differs from a recomputation. They do not say "
+                          "which side is correct, who changed it, or whether any record is true."}
+
+
 def verify_handoff(bundle: object) -> dict:
     if isinstance(bundle, dict) and bundle.get("contract_version") == "unconventional-moves/handoff-v0.2":
         fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observations", "observations_sha256", "timeline_review"}
         if set(bundle) != fields or validate_plan_data(bundle["plan"]):
             raise ValueError("unsupported timeline handoff structure or invalid plan")
+        _check_plan_digest(bundle)
+        selected_move(bundle["plan"])
+        try:
+            review_timeline(bundle["plan"], bundle["observations"])
+        except ValueError as exc:
+            raise ValueError("handoff observations are invalid: " + str(exc)) from exc
         expected = timeline_handoff(bundle["plan"], bundle["observations"])
-        if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-            raise ValueError("timeline handoff digest or derived review does not match its contents")
+        if not _same_json(bundle, expected):
+            raise _mismatch("timeline handoff digest or derived review does not match its contents", bundle, expected)
         return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
                 "checkpoint_count": len(bundle["observations"]), "human_review_required": True,
                 "limitation": "Internal consistency only. An unsigned bundle does not authenticate authorship, completeness, factual truth, consent, or approval."}
@@ -374,9 +461,16 @@ def verify_handoff(bundle: object) -> dict:
         raise ValueError("unsupported handoff structure")
     if validate_plan_data(bundle["plan"]):
         raise ValueError("handoff contains an invalid plan")
+    _check_plan_digest(bundle)
+    selected_move(bundle["plan"])
+    if bundle["observation"] is not None:
+        try:
+            evaluate_outcome(bundle["plan"], bundle["observation"])
+        except ValueError as exc:
+            raise ValueError("handoff observation is invalid: " + str(exc)) from exc
     expected = handoff_bundle(bundle["plan"], bundle["observation"])
-    if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-        raise ValueError("handoff digest or derived review does not match its contents")
+    if not _same_json(bundle, expected):
+        raise _mismatch("handoff digest or derived review does not match its contents", bundle, expected)
     return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
             "observation_present": bundle["observation"] is not None, "human_review_required": True,
             "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
@@ -757,6 +851,93 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     return revised
 
 
+# init copies one complete synthetic example per contract version.
+INIT_EXAMPLES = {"v0.1": "examples/example-plan.json", "v0.2": "examples/bounded-plan.json"}
+EXPERIMENT_DRAFT = {"hypothesis": "", "metric": "", "baseline": None, "target": None, "direction": None,
+                    "start_within_hours": None, "duration_hours": None, "max_minutes": None, "exposure": None,
+                    "rollback": ""}
+
+
+def _require_v01(plan: dict, command: str) -> None:
+    if plan["contract_version"] != "unconventional-moves/v0.1":
+        raise ValueError(command + " requires a version 0.1 plan")
+
+
+def experiments_draft(plan: dict) -> dict:
+    """An unfilled experiment for every move. It fails promote until a person fills it."""
+    _require_v01(plan, "experiments-draft")
+    return {move["id"]: dict(EXPERIMENT_DRAFT) for move in plan["moves"]}
+
+
+def promote_plan(plan: dict, experiments: object, move_id: str, reason: str, first_step: str) -> dict:
+    """Write a new version 0.2 revision from declared experiments and one declared selection.
+
+    No number is defaulted or inferred, the input plan is never modified, and
+    the selection records no approval.
+    """
+    _require_v01(plan, "promote")
+    if not isinstance(experiments, dict):
+        raise ValueError("experiments must be a JSON object keyed by move ID")
+    ids = [move["id"] for move in plan["moves"]]
+    missing, extra = [i for i in ids if i not in experiments], sorted(set(experiments) - set(ids))
+    if missing or extra:
+        raise ValueError("experiments must have exactly one entry per plan move ID"
+                         + ("; missing: " + ", ".join(missing) if missing else "")
+                         + ("; not in the plan: " + ", ".join(extra) if extra else ""))
+    failures = [failure for move_key in ids for failure in validate_experiment(experiments[move_key], move_key)]
+    if failures:
+        raise ValueError("; ".join(failures))
+    if move_id not in ids:
+        raise ValueError("move ID must identify an existing move")
+    if not has_visible_text(reason) or not has_visible_text(first_step):
+        raise ValueError("selection reason and first step must be non-empty")
+    revised = json.loads(json.dumps(plan))
+    revised["contract_version"] = "unconventional-moves/v0.2"
+    for move in revised["moves"]:
+        move["experiment"] = json.loads(json.dumps(experiments[move["id"]]))
+    revised["selected_move_id"] = move_id
+    revised["prioritized_action"] = f"Selected {move_id}. Reason: {reason.strip()} First step: {first_step.strip()}"
+    failures = validate_plan_data(revised)
+    if failures:
+        raise ValueError("; ".join(failures))
+    if len((json.dumps(revised, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("promoted revision exceeds the supported JSON byte limit")
+    return revised
+
+
+# The seven labeled prose fields, in order, after id, title, and mechanism.
+RESPONSE_FIELDS = dict(zip(RESPONSE_LABELS, MOVE_FIELDS[3:]))
+
+
+def import_response(text: str, goal: str, high_stakes: bool = False, sources: object = None) -> dict:
+    """Transcribe a structurally valid prose response into a version 0.1 plan.
+
+    Field text is copied, never inferred or verified. The goal comes only from
+    the caller, and sources only from declared records: prose citations are
+    never parsed into source objects.
+    """
+    parsed = parse_response(text)
+    failures = check_response(parsed, high_stakes)
+    if failures:
+        raise ValueError("response is not a structurally valid completed plan: " + "; ".join(failures))
+    if parsed["sources_lines"] and sources is None:
+        raise ValueError("response has a Sources section; supply the declared records with --sources")
+    moves = []
+    for idea in parsed["ideas"]:
+        fields = idea_fields(idea)
+        moves.append({"id": f"move-{idea['number']:02d}", "title": idea["title"], "mechanism": idea["mechanism"],
+                      **{RESPONSE_FIELDS[label]: fields[label] for label in RESPONSE_LABELS}})
+    plan = {"contract_version": "unconventional-moves/v0.1", "goal": goal, "high_stakes": high_stakes,
+            "moves": moves, "prioritized_action": parsed["priorities"][0]["text"],
+            "sources": [] if sources is None else sources}
+    failures = validate_plan_data(plan)
+    if failures:
+        raise ValueError("imported plan is invalid: " + "; ".join(failures))
+    if len((json.dumps(plan, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("imported plan exceeds the supported JSON byte limit")
+    return plan
+
+
 class InputUnavailable(Exception):
     """An input file could not be opened, read, or decoded as UTF-8."""
 
@@ -787,7 +968,40 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--history", type=Path)
     record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
+    init.add_argument("--contract", choices=sorted(INIT_EXAMPLES), default="v0.2",
+                      help="v0.2 (default) copies the bounded experiment example; v0.1 copies the free-text example")
     init.add_argument("--output", type=Path, required=True)
+    expdraft = commands.add_parser("experiments-draft",
+                                   help="Prepare an unfilled experiment for every move of a v0.1 plan, for promote")
+    expdraft.add_argument("plan", type=Path)
+    expdraft.add_argument("--output", type=Path, required=True)
+    promote = commands.add_parser(
+        "promote", help="Write a new v0.2 revision of a v0.1 plan from filled experiments and one declared "
+                        "selection; no number is defaulted and no approval is established",
+        description="Add a declared experiment to every move of a version 0.1 plan, record one selected move "
+                    "with a reason and first step, and write the result as a new version 0.2 revision. Every "
+                    "move needs a real experiment: if any baseline is unknown, stay in version 0.1.")
+    promote.add_argument("plan", type=Path)
+    promote.add_argument("--experiments", type=Path, required=True,
+                         help="a JSON object mapping every move ID to its experiment, as experiments-draft writes it")
+    promote.add_argument("--move-id", required=True)
+    promote.add_argument("--reason", required=True)
+    promote.add_argument("--first-step", required=True)
+    promote.add_argument("--output", type=Path, required=True)
+    imported = commands.add_parser(
+        "import-response", help="Transcribe a structurally valid prose response into a new v0.1 plan for review; "
+                                "nothing in it is verified",
+        description="Copy each idea's title, mechanism, and seven labeled fields into a new version 0.1 plan, "
+                    "with IDs move-01 onward. The response must pass the structural response check first. The "
+                    "plan is a transcription for review: no claim in it is verified, the goal comes only from "
+                    "--goal, and sources come only from --sources, never from prose citations.")
+    imported.add_argument("response", type=Path, help="the saved Markdown response")
+    imported.add_argument("--goal", required=True, help="the plan goal in your words; it is never inferred from the response")
+    imported.add_argument("--high-stakes", action="store_true",
+                          help="mark the plan high stakes; the response then needs a Sources section and --sources")
+    imported.add_argument("--sources", type=Path, metavar="SOURCES.json",
+                          help="a JSON array of declared source records; required when the response has a Sources section")
+    imported.add_argument("--output", type=Path, required=True)
     select = commands.add_parser("select", help="Record a declared selection and first step in a new revision; no approval is established")
     select.add_argument("plan", type=Path)
     select.add_argument("--move-id", required=True)
@@ -824,8 +1038,14 @@ def main(argv: list[str] | None = None) -> int:
     handoff_data.add_argument("--observation", type=Path)
     handoff_data.add_argument("--timeline", type=Path)
     handoff.add_argument("--output", type=Path, required=True)
-    verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
+    verify = commands.add_parser(
+        "verify-handoff", help="Recompute a handoff's internal consistency",
+        description="Validate the plan and observations in a handoff and recompute every digest and derived "
+                    "field. A mismatch names the first differing paths; --diff writes every difference as JSON.")
     verify.add_argument("bundle", type=Path)
+    verify.add_argument("--diff", action="store_true",
+                        help="on a mismatch, write each differing path with its bundle and recomputed values, "
+                             "then exit 1; a consistent bundle's output is unchanged")
     verify.add_argument("--output", type=Path)
     unpack = commands.add_parser("unpack-handoff", help="Verify a handoff and restore its complete supplied history for review")
     unpack.add_argument("bundle", type=Path)
@@ -868,8 +1088,18 @@ def main(argv: list[str] | None = None) -> int:
                                        json_input(args.history) if args.history else [])
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "init":
-            plan = plan_input(ROOT / "examples/bounded-plan.json")
+            plan = plan_input(ROOT / INIT_EXAMPLES[args.contract])
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "experiments-draft":
+            emit(json.dumps(experiments_draft(plan_input(args.plan)), indent=2) + "\n", args.output)
+        elif args.command == "promote":
+            result = promote_plan(plan_input(args.plan), json_input(args.experiments), args.move_id, args.reason,
+                                  args.first_step)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "import-response":
+            text = _read_input(read_response_file, args.response)
+            declared = json_input(args.sources) if args.sources else None
+            emit(json.dumps(import_response(text, args.goal, args.high_stakes, declared), indent=2) + "\n", args.output)
         elif args.command == "handoff":
             plan = plan_input(args.plan)
             if args.timeline:
@@ -881,7 +1111,16 @@ def main(argv: list[str] | None = None) -> int:
                 result = handoff_bundle(plan, observation)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
-            emit(json.dumps(verify_handoff(json_input(args.bundle)), indent=2) + "\n", args.output)
+            bundle = json_input(args.bundle)
+            try:
+                result = verify_handoff(bundle)
+            except HandoffMismatch as exc:
+                if not args.diff:
+                    raise
+                emit(json.dumps(mismatch_report(bundle, exc), indent=2) + "\n", args.output)
+                print("FAIL " + json.dumps(str(exc), ensure_ascii=True)[1:-1], file=sys.stderr)
+                return 1
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "unpack-handoff":
             result = unpack_handoff(json_input(args.bundle), args.output_dir)
             emit(json.dumps(result, indent=2) + "\n", None)

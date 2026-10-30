@@ -1,8 +1,9 @@
 # Usage recipes
 
-Five copy-paste recipes that exercise the actual offline CLI. They use only
+Seven copy-paste recipes that exercise the actual offline CLI. They use only
 files and commands that ship in this repository: `examples/example-plan.json`
-is a v0.1 plan, `examples/bounded-plan.json` is a v0.2 bounded plan, and
+is a v0.1 plan, `examples/example-response.md` is the same plan written as a
+prose skill response, `examples/bounded-plan.json` is a v0.2 bounded plan, and
 `examples/bounded-outcome.json` is a synthetic outcome bound to its plan
 revision. Every recipe calls `python scripts/moves.py <command>` directly,
 with flags that exist in `scripts/moves.py`. `scripts/moves_cli.py` accepts
@@ -15,13 +16,13 @@ anything.
 
 ## Recipe 1: Start from the synthetic v0.1 plan and render a Markdown report
 
-The `init` command copies `examples/bounded-plan.json`, but for v0.1 the
-example lives at `examples/example-plan.json`. Validate the existing file
-first, then render an inert Markdown report.
+`init --contract v0.1` copies `examples/example-plan.json` for editing.
+Validate the copy, then render an inert Markdown report.
 
 ```sh
-python scripts/validate_plan.py examples/example-plan.json
-python scripts/moves.py render examples/example-plan.json --output example-plan.md
+python scripts/moves.py init --contract v0.1 --output v01-draft.json
+python scripts/validate_plan.py v01-draft.json
+python scripts/moves.py render v01-draft.json --output example-plan.md
 ```
 
 Open `example-plan.md` to read each move's mechanism, concrete move, why
@@ -32,7 +33,7 @@ follows source URLs.
 
 ## Recipe 2: Initialize a v0.2 draft, review it, and select one move
 
-`init` always copies the v0.2 bounded plan. Review the copy for repeated
+Without `--contract`, `init` copies the v0.2 bounded plan. Review the copy for repeated
 mechanisms or unclear evidence labels, then record a declared selection in
 a new validated revision.
 
@@ -153,3 +154,54 @@ and flags an out-of-scope selected move without replacing it.
 dates; dates within the threshold are not verified current sources.
 Publisher identity, content, relevance, and high-stakes suitability still
 need human review.
+
+## Recipe 6: Import a prose skill response as a v0.1 plan
+
+The skill answers in prose by default. Check the saved response's structure,
+then transcribe it into a v0.1 plan for the other commands. The goal is
+always yours: `import-response` never infers it from the framing.
+
+```sh
+python scripts/validate_response.py examples/example-response.md
+python scripts/moves.py import-response examples/example-response.md \
+    --goal "Make practice consistent during a fictional irregular week." \
+    --output imported.json
+python scripts/moves.py review imported.json --output imported-review.json
+python scripts/moves.py render imported.json --output imported.md
+```
+
+The response passes only the structural check; its content is unverified.
+`imported.json` has IDs `move-01` to `move-05` and is identical to
+`examples/example-plan.json`, because that example response is its prose form.
+A response with a Sources section needs `--sources` with a JSON array of
+declared source records, and `--high-stakes` needs at least one. Prose
+citations are never parsed into sources. The input response is unchanged.
+
+## Recipe 7: Promote a v0.1 plan to v0.2 with declared experiments
+
+Version 0.2 needs a real experiment for every move. `experiments-draft`
+writes an unfilled experiment object per move ID, with no number filled
+in, so an unfilled draft fails `promote`. Fill every field with actual
+baselines and bounds; if any baseline is unknown, stay in v0.1. This
+walkthrough continues from Recipe 6 and uses
+`examples/promote-experiments.json`, the **fictional** experiments of
+`examples/bounded-plan.json`, whose move IDs match the imported plan.
+
+```sh
+python scripts/moves.py experiments-draft imported.json --output experiments.json
+python scripts/moves.py promote imported.json \
+    --experiments examples/promote-experiments.json --move-id move-01 \
+    --reason "Cue timing is the cheapest uncertainty to test" \
+    --first-step "Pick the existing daily cue" --output promoted.json
+python scripts/validate_plan.py promoted.json
+python scripts/moves.py compare imported.json promoted.json --output promotion-changes.json
+python scripts/moves.py card promoted.json --output promoted-card.json
+```
+
+`promoted.json` is a new v0.2 revision: every move gains its declared
+experiment, `selected_move_id` is set, and `prioritized_action` reads
+`Selected move-01. Reason: ... First step: ...`, as `select` writes it.
+Every other field is copied unchanged and `imported.json` is not modified.
+`promotion-changes.json` flags the contract version, selection, and each
+new experiment for review. The numbers are synthetic, not measurements, and
+the selection records no approval.

@@ -242,5 +242,141 @@ class HandoffRestoreTests(unittest.TestCase):
                 self.assertFalse(output.exists())
 
 
+class HandoffDiagnosticsTests(unittest.TestCase):
+    """A failing handoff names what differs instead of one generic message."""
+
+    def setUp(self):
+        self.plan = moves.read_plan(ROOT / 'examples/bounded-plan.json')
+        target = moves.selected_move(self.plan)['experiment']['target']
+        self.observation = {**moves.observation_draft(self.plan), 'elapsed_hours': 1, 'active_minutes': 1,
+                            'observed_value': target, 'notes': 'Synthetic only; no experiment occurred.'}
+        # A parsed bundle, as verify-handoff reads it: no shared objects between sections.
+        self.bundle = json.loads(json.dumps(moves.handoff_bundle(self.plan, self.observation)))
+
+    def run_cli(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / 'scripts/moves.py'), *map(str, args)],
+                              capture_output=True, text=True, encoding='utf-8')
+
+    def write(self, directory, name, value):
+        path = Path(directory) / name
+        path.write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
+        return path
+
+    def test_changed_progress_names_its_path_and_diff_shows_both_values(self):
+        self.assertEqual(self.bundle['outcome_review']['measurement']['progress_fraction'], '1')
+        bad = copy.deepcopy(self.bundle)
+        bad['outcome_review']['measurement']['progress_fraction'] = '1.0'
+        with self.assertRaises(moves.HandoffMismatch) as caught:
+            moves.verify_handoff(bad)
+        self.assertEqual(caught.exception.mismatches, [{'path': 'outcome_review.measurement.progress_fraction',
+                                                        'change': 'changed', 'bundle': '1.0', 'recomputed': '1'}])
+        with tempfile.TemporaryDirectory() as td:
+            path = self.write(td, 'bad.json', bad)
+            result = self.run_cli('verify-handoff', path)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, 'FAIL handoff digest or derived review does not match its contents: '
+                                            'outcome_review.measurement.progress_fraction\n')
+            result = self.run_cli('verify-handoff', path, '--diff')
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(result.stdout)
+            self.assertFalse(report['consistent'])
+            self.assertEqual(report['contract_version'], 'unconventional-moves/handoff-v0.1')
+            self.assertEqual(report['mismatches'][0]['bundle'], '1.0')
+            self.assertEqual(report['mismatches'][0]['recomputed'], '1')
+            self.assertIn('do not edit records', report['regenerate'])
+            self.assertTrue(result.stderr.startswith('FAIL handoff digest'))
+            # --output receives the report and is never overwritten.
+            output = Path(td) / 'diff.json'
+            self.assertEqual(self.run_cli('verify-handoff', path, '--diff', '--output', output).returncode, 1)
+            self.assertEqual(json.loads(output.read_text(encoding='utf-8')), report)
+
+    def test_numeric_spelling_one_versus_one_point_zero_is_a_difference(self):
+        bad = copy.deepcopy(self.bundle)
+        bad['card']['experiment']['max_minutes'] = float(bad['card']['experiment']['max_minutes'])
+        with self.assertRaises(moves.HandoffMismatch) as caught:
+            moves.verify_handoff(bad)
+        self.assertEqual([item['path'] for item in caught.exception.mismatches], ['card.experiment.max_minutes'])
+
+    def test_changed_checkpoint_reason_reports_the_indexed_path(self):
+        observation = {**self.observation, 'stop_triggered': True}
+        bad = json.loads(json.dumps(moves.timeline_handoff(self.plan, [observation])))
+        bad['timeline_review']['checkpoints'][0]['review']['reasons'] = []
+        with self.assertRaises(moves.HandoffMismatch) as caught:
+            moves.verify_handoff(bad)
+        found = caught.exception.mismatches
+        self.assertEqual(found, [{'path': 'timeline_review.checkpoints[0].review.reasons[0]', 'change': 'missing',
+                                  'recomputed': 'declared_stop_condition_triggered'}])
+        self.assertIn('timeline_review.checkpoints[0].review.reasons[0]', str(caught.exception))
+        self.assertTrue(str(caught.exception).startswith('timeline handoff digest or derived review does not match'))
+
+    def test_many_differences_list_five_paths_and_a_count(self):
+        bad = copy.deepcopy(self.bundle)
+        for field in ('hypothesis', 'metric', 'rollback', 'exposure', 'direction', 'duration_hours', 'max_minutes'):
+            bad['card']['experiment'][field] = 'changed'
+        with self.assertRaises(moves.HandoffMismatch) as caught:
+            moves.verify_handoff(bad)
+        self.assertEqual(len(caught.exception.mismatches), 7)
+        self.assertTrue(str(caught.exception).endswith(' and 2 more'), str(caught.exception))
+
+    def test_edited_plan_reports_the_digest_not_observation_advice(self):
+        bad = copy.deepcopy(self.bundle)
+        bad['plan']['goal'] += ' Edited after export.'
+        with tempfile.TemporaryDirectory() as td:
+            path = self.write(td, 'edited.json', bad)
+            for command in (('verify-handoff', path), ('unpack-handoff', path, '--output-dir', Path(td) / 'out')):
+                with self.subTest(command=command[0]):
+                    result = self.run_cli(*command)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn('handoff plan was changed after the bundle was written: plan_sha256 does not match '
+                                  'the plan', result.stderr)
+                    self.assertNotIn('observation-draft', result.stderr)
+            self.assertFalse((Path(td) / 'out').exists())
+            report = json.loads(self.run_cli('verify-handoff', path, '--diff').stdout)
+            self.assertEqual([item['path'] for item in report['mismatches']], ['plan_sha256'])
+            self.assertEqual(report['mismatches'][0]['recomputed'], moves.plan_digest(bad['plan']))
+
+    def test_invalid_observation_is_named_as_such(self):
+        bad = copy.deepcopy(self.bundle)
+        bad['observation']['active_minutes'] = 61
+        with self.assertRaisesRegex(ValueError, '^handoff observation is invalid: outcome active minutes cannot exceed'):
+            moves.verify_handoff(bad)
+        bundle = moves.timeline_handoff(self.plan, [self.observation])
+        bundle['observations'][0]['notes'] = ' '
+        with self.assertRaisesRegex(ValueError, '^handoff observations are invalid: outcome notes must describe'):
+            moves.verify_handoff(bundle)
+
+    def test_structure_messages_are_unchanged_and_never_produce_a_diff(self):
+        extra = {**self.bundle, 'extra': True}
+        missing = {key: value for key, value in self.bundle.items() if key != 'review'}
+        for bad in (extra, missing):
+            with self.assertRaisesRegex(ValueError, '^unsupported handoff structure$'):
+                moves.verify_handoff(bad)
+        timeline = {**moves.timeline_handoff(self.plan, [self.observation]), 'extra': True}
+        with self.assertRaisesRegex(ValueError, '^unsupported timeline handoff structure or invalid plan$'):
+            moves.verify_handoff(timeline)
+        with tempfile.TemporaryDirectory() as td:
+            result = self.run_cli('verify-handoff', self.write(td, 'extra.json', extra), '--diff')
+            self.assertEqual((result.returncode, result.stdout), (1, ''))
+            self.assertEqual(result.stderr, 'FAIL unsupported handoff structure\n')
+
+    def test_consistent_output_is_identical_with_and_without_diff(self):
+        with tempfile.TemporaryDirectory() as td:
+            for name, bundle in (('v1.json', self.bundle),
+                                 ('v2.json', moves.timeline_handoff(self.plan, [self.observation]))):
+                path = self.write(td, name, bundle)
+                plain, diff = self.run_cli('verify-handoff', path), self.run_cli('verify-handoff', '--diff', path)
+                self.assertEqual(plain.returncode, 0, plain.stderr)
+                self.assertEqual((diff.returncode, diff.stdout, diff.stderr), (0, plain.stdout, ''))
+
+    def test_difference_list_is_never_empty_for_a_failing_bundle(self):
+        found = moves.handoff_differences({'a': [1, {'b': True}]}, {'a': [1, {'b': 1}], 'c': None})
+        self.assertEqual(found, [{'path': 'a[1].b', 'change': 'changed', 'bundle': True, 'recomputed': 1},
+                                 {'path': 'c', 'change': 'missing', 'recomputed': None}])
+        self.assertEqual(moves.handoff_differences({'odd key': 1}, {'odd key': 2})[0]['path'], '["odd key"]')
+        self.assertEqual(moves.handoff_differences([1], [1, 2])[0], {'path': '[1]', 'change': 'missing', 'recomputed': 2})
+        self.assertEqual(moves.handoff_differences('x', 'y'),
+                         [{'path': '(root)', 'change': 'changed', 'bundle': 'x', 'recomputed': 'y'}])
+
+
 if __name__ == '__main__':
     unittest.main()

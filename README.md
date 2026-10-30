@@ -23,6 +23,26 @@ replacement separately. The project path is explicit and does not depend on an
 unset global configuration variable.
 The installed skill needs no Python, CLI, account, or API key.
 
+With Python 3.11 to 3.14, the installer performs that copy safely from a
+checkout or an extracted package:
+
+```sh
+python scripts/install_skill.py --project path/to/project
+python scripts/install_skill.py --project path/to/project --check
+```
+
+It copies exactly the skill files listed in `package-manifest.json` into
+`<project>/.agents/skills/unconventional-moves`, refuses any existing
+destination (including an empty directory or a symlink), checks every staged
+file against its source, and publishes the directory with one rename, so a
+failure leaves nothing at the destination. `--dest DIR` names an explicit new
+directory for another host instead. `--check` writes nothing: it reports each
+installed file as identical, changed, missing, or extra and exits 0 only when
+the copy is identical. The installer never overwrites, merges, or deletes;
+to upgrade, run `--check`, keep a backup, move the old directory away
+yourself, then install. It reads no environment variable and has no default
+destination.
+
 In that project's Codex session, invoke:
 
 ```text
@@ -92,6 +112,15 @@ Unsafe goals, contradictory constraints, or fewer than five feasible distinct
 options warrant a refusal, limitation, or focused question. The skill must not
 pad the answer or emit an invalid plan disguised as a completed result.
 
+To check a saved response against this shape, run
+`python scripts/validate_response.py response.md`; add `--high-stakes` to
+also require a Sources section, or `--json` for a machine-readable report. It
+checks structure only: five to seven numbered ideas with a mechanism, the
+seven fields in order, Sources placement, and one final prioritized action.
+Wrapped lines and fenced examples are handled. A pass says nothing about
+quality, novelty, truth, or safety; a refusal or limitation is reported as
+not a completed plan.
+
 ## Evidence and safety
 
 Supplied claims are not independently checked facts. Inference and speculation
@@ -133,7 +162,13 @@ returns `stop_and_review` because its bounds are reached. If the destination
 files exist, use new filenames; report commands refuse overwrites.
 
 For your own plan, replace the synthetic content, select one move, and create
-new observation records bound to that plan revision. Follow the complete
+new observation records bound to that plan revision. To start from a skill
+answer instead, save the prose response and run
+`python scripts/moves.py import-response response.md --goal "Your goal" --output plan.json`.
+It copies each idea's title, mechanism, and seven fields into a version 0.1
+plan only when the response passes the structural check, takes the goal only
+from `--goal` and sources only from a `--sources` JSON array, and verifies
+nothing. Follow the complete
 [local workflow](docs/local-workflow.md) and [experiment contract](docs/experiment-contract.md)
 for selection, checkpoints, history, handoffs, comparisons, and exports.
 
@@ -157,7 +192,9 @@ experiment succeeded or was approved; 1 means invalid input or a file error,
 and 2 means invalid command arguments. Numeric ceilings and dates passed to
 `screen` and `sources` are checked when arguments are parsed, so an
 out-of-range value or an impossible date also exits 2. File errors say whether
-the input could not be read or the output could not be created. Read the
+the input could not be read or the output could not be created. A failing
+`verify-handoff` names the differing fields, and `--diff` lists each with its
+stored and recomputed value. Read the
 outcome, warnings, and stop reasons. Numeric success never overrides a stop condition or authorizes
 continuation.
 
@@ -175,8 +212,15 @@ and a `sources` array. Version 0.2 adds a selected move ID and measurable
 experiment cards. The first choice in the recommendation must agree with the
 selected ID; free-text meaning still needs human review.
 
+A prose response converts to a v0.1 plan with `moves.py import-response`,
+because prose carries no numeric experiment fields.
+
 Use v0.1 when meaningful numeric baselines are unknown, and identify what needs
-measuring. Do not invent numbers to force v0.2. Version 0.2 retains a start bound
+measuring. Do not invent numbers to force v0.2. `moves.py init --contract v0.1`
+starts from the free-text example. Once every move has a real baseline,
+`moves.py experiments-draft` writes an unfilled experiment per move and
+`moves.py promote` writes a new v0.2 revision from the filled file plus one
+declared selection, never defaulting a number or changing the input. Version 0.2 retains a start bound
 of 0 to 48 hours and duration of 1 to 48 hours. Test a narrow uncertainty within
 that window rather than implying a long-term hypothesis has been proved.
 The installed skill bundles both schemas and its strategy review reference.
@@ -184,10 +228,11 @@ The installed skill bundles both schemas and its strategy review reference.
 ## Integration notes
 
 For concrete offline workflows using the bundled examples, see
-[usage recipes](docs/usage-recipes.md); five copy-paste recipes cover v0.1
+[usage recipes](docs/usage-recipes.md); seven copy-paste recipes cover v0.1
 rendering, v0.2 selection and cards, the synthetic outcome replay,
-cumulative checkpoint histories with CSV export, and the combined
-constraint shortlist and source date audit. To choose between the two
+cumulative checkpoint histories with CSV export, the combined
+constraint shortlist and source date audit, importing a prose response
+as a plan, and promoting a v0.1 plan to v0.2. To choose between the two
 schema versions using the actual required fields, the experiment card
 bounds, and the CLI version gate, see the
 [version decision tree](docs/version-decision.md). Both docs rely only on
@@ -202,7 +247,7 @@ python scripts/check.py
 ```
 
 It runs, in order and stopping at the first failure: `scripts/validate.py`,
-both example plan validators, the synthetic outcome replay,
+both example plan validators, the example response check, the synthetic outcome replay,
 `python -m unittest discover -s tests -v`, the offline eval fixture runner
 `evals/runner.py`, and a package build into a temporary directory.
 `python scripts/check.py --list` prints the exact commands. To build a package
@@ -226,7 +271,8 @@ builds, so cross-platform byte identity requires testing, not an assumption.
 
 Extract the archive into a fresh directory, verify its checksum against the
 builder's checksum file, then copy the extracted `skill/unconventional-moves`
-directory to the project skill location above. A checksum detects a content
+directory to the project skill location above, or run the extracted
+`scripts/install_skill.py --project <project>`. A checksum detects a content
 mismatch; it does not authenticate the publisher. Packaging does not publish
 or change remote metadata.
 
@@ -251,9 +297,11 @@ Ordinary tests remain offline.
 | [Invocation metadata](skill/unconventional-moves/agents/openai.yaml) | Display name, prompt, and implicit invocation policy |
 | [Worksheet](templates/worksheet.md) | Copy-ready brief and move template |
 | [Plan validator](scripts/validate_plan.py) | Structural validation and limited lexical screening |
+| [Response checker](scripts/validate_response.py) | Structural check of a prose response against the output shape |
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
 | [Check runner](scripts/check.py) | The CI check set in one command |
+| [Skill installer](scripts/install_skill.py) | Installs the skill into a new directory and checks an installed copy for drift |
 | [Release gate](scripts/versioning.py) | Reads `VERSION`, checks CHANGELOG, and gates tagged releases |
 | [Security](SECURITY.md) | Security scope and reporting guidance |
 | [Contributing](CONTRIBUTING.md) | Contribution and verification rules |

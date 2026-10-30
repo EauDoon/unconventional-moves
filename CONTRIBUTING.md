@@ -36,7 +36,8 @@ and evidence boundaries.
    separate from tuning. Structural tests do not establish semantic improvement.
 3. Add regression coverage for confirmed defects, then implement the fix.
 4. Run `python scripts/check.py`. It runs the CI check set in order:
-   `scripts/validate.py`, both example plan validators, the outcome replay,
+   `scripts/validate.py`, both example plan validators, the example response
+   check, the outcome replay,
    `python -m unittest discover -s tests -v`, `evals/runner.py`, and a
    package build. Use a verified Python interpreter.
 5. Build twice in fresh directories, compare checksums in the same environment,
@@ -62,7 +63,12 @@ Keep a Changelog, and every change adds its entry under `[Unreleased]`.
    The release workflow checks the tag against `VERSION`, reruns the check
    set, builds the archive and checksum, attests the archive, and publishes a
    GitHub Release whose notes are that CHANGELOG section.
-5. Never delete and push a published tag again. If the workflow fails, fix
+5. If the release changes any derived string that a handoff stores, add that
+   release's handoff corpus under `tests/fixtures/` written by its own tagged
+   code, as `tests/fixtures/v0.3.0/README.md` describes. Never edit or
+   regenerate an older corpus: it proves that bundles users already exported
+   still verify.
+6. Never delete and push a published tag again. If the workflow fails, fix
    the cause and rerun it, or ship the fix in a new patch release.
 
 Product direction, evaluation, review, and acceptance remain with EauDoon.

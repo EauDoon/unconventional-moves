@@ -841,6 +841,7 @@ class CheckRunnerTests(unittest.TestCase):
         for expected in ("python scripts/validate.py",
                          "python scripts/validate_plan.py examples/example-plan.json",
                          "python scripts/validate_plan.py examples/bounded-plan.json --json",
+                         "python scripts/validate_response.py examples/example-response.md",
                          "python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json",
                          "python -m unittest discover -s tests -v",
                          "python evals/runner.py"):
@@ -876,7 +877,7 @@ class VersionGateTests(unittest.TestCase):
     def test_docstring_lists_every_gated_command(self):
         import moves_cli
         listed = moves_cli.__doc__.split("Rules:")[0]
-        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS):
+        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS | moves_cli.V01_REQUIRED_COMMANDS):
             with self.subTest(command=command):
                 self.assertRegex(listed, r"(?<![\w-])" + command + r"(?![\w-])")
         self.assertIn("single source of\ntruth for behavior", listed)

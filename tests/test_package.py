@@ -101,6 +101,11 @@ class PackageTests(unittest.TestCase):
             self.assertTrue(summary["old_history_rejected_for_revision"])
             for args in (["scripts/validate.py"],
                          ["evals/runner.py"],
+                         ["scripts/validate_response.py", "examples/example-response.md"],
+                         ["scripts/moves.py", "import-response", "examples/example-response.md",
+                          "--goal", "Synthetic extracted import.", "--output", str(root / "imported.json")],
+                         ["scripts/install_skill.py", "--dest", str(root / "installed-skill")],
+                         ["scripts/install_skill.py", "--dest", str(root / "installed-skill"), "--check"],
                          ["scripts/moves_cli.py", "unpack-handoff", str(replay / "handoff.json"),
                           "--output-dir", str(root / "shim-restored")],
                          ["scripts/moves.py", "render", "examples/example-plan.json"],
@@ -348,9 +353,11 @@ class VersionFlagTests(unittest.TestCase):
         ("-m", "scripts.moves"),
         ("scripts/moves_cli.py",),
         ("scripts/validate_plan.py",),
+        ("scripts/validate_response.py",),
         ("scripts/validate.py",),
         ("scripts/package.py",),
         ("scripts/check.py",),
+        ("scripts/install_skill.py",),
     )
     ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
 

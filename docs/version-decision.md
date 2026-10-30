@@ -65,11 +65,15 @@ before `moves.py` runs. Optional flags may precede that path.
   `observation-draft`, `outcome`, `record`, `screen`, `select`, `table`,
   `timeline`. All of them read the selected move, so none can serve a
   v0.1 plan.
+- v0.1-only commands: `experiments-draft`, `promote`. They turn a v0.1
+  plan into a v0.2 revision, so a v0.2 input is refused, by the shim and
+  by `moves.py` itself.
 - Commands that accept either version: `render`, `review`, `sources`.
 - `compare` takes two plans, so it is gated by plan validation in
   `moves.py` rather than by the shim, and it works on either version.
-- Commands with no plan argument: `init`, `verify-handoff`,
-  `unpack-handoff`.
+- Commands with no plan argument: `init`, `import-response`,
+  `verify-handoff`, `unpack-handoff`. `import-response` reads a prose
+  response and always writes a v0.1 plan.
 
 The shim also refuses any `contract_version` outside the two supported
 strings. Unknown versions do not pass through to `moves.py`.
@@ -81,6 +85,9 @@ strings. Unknown versions do not pass through to `moves.py`.
   metric and target are unverified declarations, not measured evidence.
 - You only need a free-text plan, a Markdown or HTML render, a review
   report, or a source date audit. Those three commands accept v0.1.
+- You are starting from a prose skill response. `import-response`
+  transcribes it into a v0.1 plan, because prose carries no numeric
+  experiment fields.
 - The plan is high stakes and the only sources you can supply are
   declared, not verified. v0.2 would not improve the source situation
   and adds no new source field.
@@ -99,3 +106,14 @@ strings. Unknown versions do not pass through to `moves.py`.
 - A v0.2 plan still does not establish a verified chooser, approved
   action, or real measurement. The shape is stricter, not the safety
   net.
+
+## Moving from v0.1 to v0.2
+
+Start in v0.1 with `init --contract v0.1` or `import-response`. When every
+move has a real, measured baseline, run `experiments-draft` on the plan, fill
+in every experiment field, and run `promote` with one `--move-id`,
+`--reason`, and `--first-step`. Version 0.2 has no partial experiments: every
+move needs one. If any baseline is unknown, stay in v0.1 and identify what
+needs measuring rather than inventing a number. The promoted plan is a new
+revision with a new digest; run `compare` against the v0.1 plan and review
+the flagged changes before preparing a card.
