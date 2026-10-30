@@ -40,6 +40,41 @@ An ordinary write failure attempts to clean up only the files this invocation
 created. A process termination or cleanup failure can leave an incomplete
 directory; use a fresh destination and rerun from the original handoff.
 
+## When verification fails
+
+`verify-handoff` and `unpack-handoff` say what failed instead of one generic
+message, and `unpack-handoff` still creates no directory:
+
+- `unsupported handoff structure` or `invalid plan`: the bundle is not a
+  handoff this tool writes, or its plan breaks the contract.
+- `handoff plan was changed after the bundle was written`: the stored
+  `plan_sha256` does not match the plan, so the plan was edited after export.
+- `handoff observation is invalid` (or `observations are invalid`): the
+  supplied record itself breaks the outcome rules, for example more active
+  minutes than elapsed time.
+- `digest or derived review does not match its contents: PATH, ...`: a
+  recomputed field differs. Up to five paths are named, such as
+  `outcome_review.measurement.progress_fraction`, followed by `and N more`.
+
+For every differing path with the stored and recomputed values, run:
+
+```sh
+python scripts/moves.py verify-handoff handoff.json --diff --output handoff-diff.json
+```
+
+On a mismatch `--diff` writes `consistent: false`, each path with its change
+(`changed`, `missing`, or `unexpected`), both values, and the advice to rebuild,
+then exits 1; a consistent bundle prints the usual report and exits 0. Do not
+edit a bundle to make it pass. Rebuild it with `handoff` from the source plan
+and observations. A difference shows where the bundle and the recomputation
+disagree; it does not show which one is correct or who changed it.
+
+Handoffs written by release 0.3.0 still verify and restore unchanged: the
+repository keeps a corpus of them in `tests/fixtures/v0.3.0/`, written by the
+0.3.0 code, and the test suite checks every file. A bundle carrying one of the
+rounded strings that 0.2.0 wrote for extreme magnitudes still fails, as the
+0.3.0 notes describe; `--diff` now names that string.
+
 ## Review before adding records
 
 Read `restored/resume-review.json`. For a nonempty history:

@@ -1,0 +1,24 @@
+[
+  {
+    "contract_version": "unconventional-moves/outcome-v0.1",
+    "plan_sha256": "5a03e5b88016a3a7826ba517b5db500b2e5d5e495fe6c7737b8ad78cb357bbe0",
+    "move_id": "move-01",
+    "observed_value": 2e-05,
+    "elapsed_hours": 0.2,
+    "active_minutes": 6,
+    "stop_triggered": false,
+    "consent_confirmed": false,
+    "notes": "Synthetic 0.3.0 corpus record; no experiment occurred."
+  },
+  {
+    "contract_version": "unconventional-moves/outcome-v0.1",
+    "plan_sha256": "5a03e5b88016a3a7826ba517b5db500b2e5d5e495fe6c7737b8ad78cb357bbe0",
+    "move_id": "move-01",
+    "observed_value": 2e-05,
+    "elapsed_hours": 0.3,
+    "active_minutes": 12,
+    "stop_triggered": false,
+    "consent_confirmed": false,
+    "notes": "Synthetic 0.3.0 corpus record; no experiment occurred."
+  }
+]

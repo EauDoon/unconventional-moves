@@ -362,14 +362,97 @@ def handoff_bundle(plan: dict, observation: object = None) -> dict:
     return bundle
 
 
+class HandoffMismatch(ValueError):
+    """A handoff whose stored digest or derived fields differ from a recomputation.
+
+    ``mismatches`` lists every differing leaf as path, change (changed,
+    missing, or unexpected), the bundle value, and the recomputed value.
+    """
+
+    def __init__(self, message: str, mismatches: list[dict]):
+        super().__init__(message)
+        self.mismatches = mismatches
+
+
+MISMATCH_PATHS_SHOWN = 5
+
+
+def _same_json(left: object, right: object) -> bool:
+    # The serialization the whole-bundle comparison uses: 1 and 1.0 differ.
+    return json.dumps(left, sort_keys=True, allow_nan=False) == json.dumps(right, sort_keys=True, allow_nan=False)
+
+
+def _path_segment(key: str) -> str:
+    return "." + key if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) else "[" + json.dumps(key) + "]"
+
+
+def handoff_differences(bundle: object, expected: object, path: str = "") -> list[dict]:
+    """Every differing leaf between a stored bundle and its recomputation, in a stable order."""
+    if isinstance(bundle, dict) and isinstance(expected, dict):
+        found = []
+        for key in sorted(bundle.keys() | expected.keys()):
+            child = (path + _path_segment(key)).lstrip(".")
+            if key not in bundle:
+                found.append({"path": child, "change": "missing", "recomputed": expected[key]})
+            elif key not in expected:
+                found.append({"path": child, "change": "unexpected", "bundle": bundle[key]})
+            else:
+                found.extend(handoff_differences(bundle[key], expected[key], child))
+        return found
+    if isinstance(bundle, list) and isinstance(expected, list):
+        found = []
+        for index in range(max(len(bundle), len(expected))):
+            child = f"{path}[{index}]"
+            if index >= len(bundle):
+                found.append({"path": child, "change": "missing", "recomputed": expected[index]})
+            elif index >= len(expected):
+                found.append({"path": child, "change": "unexpected", "bundle": bundle[index]})
+            else:
+                found.extend(handoff_differences(bundle[index], expected[index], child))
+        return found
+    if _same_json(bundle, expected):
+        return []
+    return [{"path": path or "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
+
+
+def _mismatch(prefix: str, bundle: dict, expected: dict) -> HandoffMismatch:
+    found = handoff_differences(bundle, expected) or [
+        {"path": "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
+    shown = ", ".join(item["path"] for item in found[:MISMATCH_PATHS_SHOWN])
+    more = len(found) - MISMATCH_PATHS_SHOWN
+    return HandoffMismatch(prefix + ": " + shown + (f" and {more} more" if more > 0 else ""), found)
+
+
+def _check_plan_digest(bundle: dict) -> None:
+    recomputed = plan_digest(bundle["plan"])
+    if bundle["plan_sha256"] != recomputed:
+        raise HandoffMismatch("handoff plan was changed after the bundle was written: plan_sha256 does not match the plan",
+                              [{"path": "plan_sha256", "change": "changed", "bundle": bundle["plan_sha256"],
+                                "recomputed": recomputed}])
+
+
+def mismatch_report(bundle: dict, mismatch: HandoffMismatch) -> dict:
+    return {"consistent": False, "contract_version": bundle.get("contract_version"), "failure": str(mismatch),
+            "mismatches": mismatch.mismatches,
+            "regenerate": "Rebuild with handoff from the source plan and observations; do not edit records.",
+            "limitation": "Paths name where the stored bundle differs from a recomputation. They do not say "
+                          "which side is correct, who changed it, or whether any record is true."}
+
+
 def verify_handoff(bundle: object) -> dict:
     if isinstance(bundle, dict) and bundle.get("contract_version") == "unconventional-moves/handoff-v0.2":
         fields = {"contract_version", "plan", "plan_sha256", "card", "review", "observations", "observations_sha256", "timeline_review"}
         if set(bundle) != fields or validate_plan_data(bundle["plan"]):
             raise ValueError("unsupported timeline handoff structure or invalid plan")
+        _check_plan_digest(bundle)
+        selected_move(bundle["plan"])
+        try:
+            review_timeline(bundle["plan"], bundle["observations"])
+        except ValueError as exc:
+            raise ValueError("handoff observations are invalid: " + str(exc)) from exc
         expected = timeline_handoff(bundle["plan"], bundle["observations"])
-        if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-            raise ValueError("timeline handoff digest or derived review does not match its contents")
+        if not _same_json(bundle, expected):
+            raise _mismatch("timeline handoff digest or derived review does not match its contents", bundle, expected)
         return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
                 "checkpoint_count": len(bundle["observations"]), "human_review_required": True,
                 "limitation": "Internal consistency only. An unsigned bundle does not authenticate authorship, completeness, factual truth, consent, or approval."}
@@ -378,9 +461,16 @@ def verify_handoff(bundle: object) -> dict:
         raise ValueError("unsupported handoff structure")
     if validate_plan_data(bundle["plan"]):
         raise ValueError("handoff contains an invalid plan")
+    _check_plan_digest(bundle)
+    selected_move(bundle["plan"])
+    if bundle["observation"] is not None:
+        try:
+            evaluate_outcome(bundle["plan"], bundle["observation"])
+        except ValueError as exc:
+            raise ValueError("handoff observation is invalid: " + str(exc)) from exc
     expected = handoff_bundle(bundle["plan"], bundle["observation"])
-    if json.dumps(bundle, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-        raise ValueError("handoff digest or derived review does not match its contents")
+    if not _same_json(bundle, expected):
+        raise _mismatch("handoff digest or derived review does not match its contents", bundle, expected)
     return {"consistent": True, "plan_sha256": expected["plan_sha256"], "move_id": expected["card"]["move_id"],
             "observation_present": bundle["observation"] is not None, "human_review_required": True,
             "limitation": "Internal consistency only. Unsigned local bundle; authorship, factual truth, consent, and approval are not authenticated."}
@@ -948,8 +1038,14 @@ def main(argv: list[str] | None = None) -> int:
     handoff_data.add_argument("--observation", type=Path)
     handoff_data.add_argument("--timeline", type=Path)
     handoff.add_argument("--output", type=Path, required=True)
-    verify = commands.add_parser("verify-handoff", help="Recompute a handoff's internal consistency")
+    verify = commands.add_parser(
+        "verify-handoff", help="Recompute a handoff's internal consistency",
+        description="Validate the plan and observations in a handoff and recompute every digest and derived "
+                    "field. A mismatch names the first differing paths; --diff writes every difference as JSON.")
     verify.add_argument("bundle", type=Path)
+    verify.add_argument("--diff", action="store_true",
+                        help="on a mismatch, write each differing path with its bundle and recomputed values, "
+                             "then exit 1; a consistent bundle's output is unchanged")
     verify.add_argument("--output", type=Path)
     unpack = commands.add_parser("unpack-handoff", help="Verify a handoff and restore its complete supplied history for review")
     unpack.add_argument("bundle", type=Path)
@@ -1015,7 +1111,16 @@ def main(argv: list[str] | None = None) -> int:
                 result = handoff_bundle(plan, observation)
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "verify-handoff":
-            emit(json.dumps(verify_handoff(json_input(args.bundle)), indent=2) + "\n", args.output)
+            bundle = json_input(args.bundle)
+            try:
+                result = verify_handoff(bundle)
+            except HandoffMismatch as exc:
+                if not args.diff:
+                    raise
+                emit(json.dumps(mismatch_report(bundle, exc), indent=2) + "\n", args.output)
+                print("FAIL " + json.dumps(str(exc), ensure_ascii=True)[1:-1], file=sys.stderr)
+                return 1
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "unpack-handoff":
             result = unpack_handoff(json_input(args.bundle), args.output_dir)
             emit(json.dumps(result, indent=2) + "\n", None)
