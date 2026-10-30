@@ -9,6 +9,10 @@ The root `VERSION` file is the single source of the package version, and
 
 ## [Unreleased]
 
+### Fixed
+
+- Report a checked file that is not UTF-8 as a failure instead of raising `UnicodeDecodeError`. `scripts/validate.py` decoded `SKILL.md`, `README.md`, `agents/openai.yaml`, `schemas/moves.schema.json`, and `examples/adversarial-fixtures.json` without an encoding guard, so a single non-UTF-8 byte ended the repository gate with a Python traceback instead of a diagnostic. The Markdown link check already reported this condition; the remaining read paths report it the same way and the run continues, so every other check still runs and reports.
+
 ## [0.3.0] - 2026-10-09
 
 This is the first release since 0.2.0. Archives built from `main` between 2026-09-09 and this release were named 0.2.0 but contained later changes. A `0.3.0` heading added to this file earlier was never released; its entries are part of this release.

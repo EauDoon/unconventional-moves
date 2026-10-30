@@ -317,6 +317,35 @@ class ValidateTests(unittest.TestCase):
             self.assertTrue(any("duplicate key" in failure for failure in checker.failures), checker.failures)
             self.assertTrue(all("prioritized_action" not in failure for failure in checker.failures))
 
+    def test_non_utf8_checked_files_are_failures_not_exceptions(self) -> None:
+        # A file that cannot be decoded is reported, never raised as a traceback.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_bytes(b"# Caf\xe9 notes\n")
+            checker = Checker(root)
+            self.assertEqual(checker.read("README.md"), "")
+            self.assertIn("file is UTF-8: README.md", checker.failures)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "schema.json").write_bytes(b'{"title": "Caf\xe9"}\n')
+            checker = Checker(root)
+            self.assertIsNone(checker.json_file("schema.json"))
+            self.assertTrue(any("not UTF-8" in failure for failure in checker.failures), checker.failures)
+            self.assertFalse(any("valid JSON" in check for check in checker.checks), checker.checks)
+
+    def test_repository_check_reports_a_non_utf8_file_without_a_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_bytes(b"# Caf\xe9 notes\n")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/validate.py"), "--repo-root", str(root)],
+                capture_output=True,
+            )
+            stdout = result.stdout.decode("utf-8", "replace")
+            self.assertEqual(result.returncode, 1, stdout)
+            self.assertNotIn(b"Traceback", result.stderr)
+            self.assertIn("file is UTF-8: README.md", stdout)
+
     def test_link_outside_repository_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
