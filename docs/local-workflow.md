@@ -19,7 +19,7 @@ python scripts/moves.py init --output draft.json
 python scripts/validate_plan.py draft.json --json
 ```
 
-The initial draft is a complete synthetic language-practice example. Replace its goal, all five moves, assumptions, and numeric bounds before treating it as your plan. The tool copies an example; it does not generate personalized strategy. Output creation refuses to overwrite an existing file. The same commands work as `python -m scripts.moves` from the repository root.
+The initial draft is a complete synthetic language-practice example. `init` copies the version 0.2 bounded example by default; `init --contract v0.1 --output draft.json` copies the free-text version 0.1 example instead. Replace its goal, all five moves, assumptions, and numeric bounds before treating it as your plan. The tool copies an example; it does not generate personalized strategy. Output creation refuses to overwrite an existing file. The same commands work as `python -m scripts.moves` from the repository root.
 
 Version 0.1 remains supported. See the [experiment contract](experiment-contract.md) for the additive version 0.2 fields.
 
@@ -35,6 +35,18 @@ python scripts/moves.py import-response response.md --goal "Your goal in your wo
 `import-response` first applies the structural response check and refuses (exit 1, no file) unless the response is a valid completed plan: a refusal, a limitation, Sources after the final action, or a missing field is reported instead of imported. Idea N becomes move ID `move-NN`; the heading text before the parenthesis is the title and the parenthesis is the mechanism; the seven labeled fields map to `concrete_move`, `why_overlooked`, `test_48h`, `success_signal`, `stop_condition`, `evidence_status`, and `bounds`; the final paragraph becomes `prioritized_action`. Wrapped lines join with single spaces and text is otherwise copied verbatim. Extra labeled bullets are not imported.
 
 The goal comes only from `--goal`, never from the framing. Sources are never parsed from prose: a response with a Sources section needs `--sources sources.json`, a JSON array of declared source records with `title`, `url`, and `supports`. `--high-stakes` marks the plan high stakes, which requires a Sources section in the response and at least one declared record. The result is an ordinary v0.1 plan that must pass the plan validator, and it is written only to a new file. It is a transcription for review: no claim, source, or bound in it is verified. Use `review`, `render`, and `sources` on it, or add measured experiments and promote it to v0.2 once you have real baselines.
+
+## Promote a v0.1 plan to v0.2
+
+Version 0.2 adds a measurable experiment to every move and one declared selection. Move a version 0.1 plan there only once every move has a real baseline:
+
+```sh
+python scripts/moves.py experiments-draft plan.json --output experiments.json
+python scripts/moves.py promote plan.json --experiments experiments.json --move-id move-01 --reason "Why this move first" --first-step "The first concrete step" --output promoted.json
+python scripts/moves.py compare plan.json promoted.json --output promotion-changes.json
+```
+
+`experiments-draft` writes an object keyed by every move ID, each with the ten experiment fields: empty text, and `null` for every number, direction, and exposure. Nothing is defaulted, so an unfilled draft fails `promote` with the exact field to complete. `promote` requires a version 0.1 plan and an experiments object with exactly the plan's move IDs; each experiment is checked with the same rules as a version 0.2 plan (a target that improves on its baseline in the stated direction, start within 0 to 48 hours, duration 1 to 48 hours, active minutes within the duration, and a declared exposure). The output is a new version 0.2 revision with each experiment copied exactly, `selected_move_id` set, and `prioritized_action` written as `select` writes it. Every other field is preserved, the input is never modified, and an existing output is never overwritten. Both commands refuse a version 0.2 input. If any baseline is unknown, stay in version 0.1 and record what needs measuring. Run `compare` afterwards: the contract version, selection, and each new experiment are flagged for review. Promotion records no approval and starts nothing.
 
 ## Review the portfolio
 

@@ -19,11 +19,13 @@ from datetime import date
 from urllib.parse import urlsplit
 
 try:
-    from .validate_plan import MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_plan_data
+    from .validate_plan import (MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_experiment,
+                                validate_plan_data)
     from .validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from .versioning import VersionAction
 except ImportError:
-    from validate_plan import MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_plan_data
+    from validate_plan import (MAX_PLAN_BYTES, MOVE_FIELDS, has_visible_text, read_json_file, validate_experiment,
+                               validate_plan_data)
     from validate_response import LABELS as RESPONSE_LABELS, check_response, idea_fields, parse_response, read_response_file
     from versioning import VersionAction
 
@@ -759,6 +761,60 @@ def select_plan(plan: dict, move_id: str, reason: str, first_step: str) -> dict:
     return revised
 
 
+# init copies one complete synthetic example per contract version.
+INIT_EXAMPLES = {"v0.1": "examples/example-plan.json", "v0.2": "examples/bounded-plan.json"}
+EXPERIMENT_DRAFT = {"hypothesis": "", "metric": "", "baseline": None, "target": None, "direction": None,
+                    "start_within_hours": None, "duration_hours": None, "max_minutes": None, "exposure": None,
+                    "rollback": ""}
+
+
+def _require_v01(plan: dict, command: str) -> None:
+    if plan["contract_version"] != "unconventional-moves/v0.1":
+        raise ValueError(command + " requires a version 0.1 plan")
+
+
+def experiments_draft(plan: dict) -> dict:
+    """An unfilled experiment for every move. It fails promote until a person fills it."""
+    _require_v01(plan, "experiments-draft")
+    return {move["id"]: dict(EXPERIMENT_DRAFT) for move in plan["moves"]}
+
+
+def promote_plan(plan: dict, experiments: object, move_id: str, reason: str, first_step: str) -> dict:
+    """Write a new version 0.2 revision from declared experiments and one declared selection.
+
+    No number is defaulted or inferred, the input plan is never modified, and
+    the selection records no approval.
+    """
+    _require_v01(plan, "promote")
+    if not isinstance(experiments, dict):
+        raise ValueError("experiments must be a JSON object keyed by move ID")
+    ids = [move["id"] for move in plan["moves"]]
+    missing, extra = [i for i in ids if i not in experiments], sorted(set(experiments) - set(ids))
+    if missing or extra:
+        raise ValueError("experiments must have exactly one entry per plan move ID"
+                         + ("; missing: " + ", ".join(missing) if missing else "")
+                         + ("; not in the plan: " + ", ".join(extra) if extra else ""))
+    failures = [failure for move_key in ids for failure in validate_experiment(experiments[move_key], move_key)]
+    if failures:
+        raise ValueError("; ".join(failures))
+    if move_id not in ids:
+        raise ValueError("move ID must identify an existing move")
+    if not has_visible_text(reason) or not has_visible_text(first_step):
+        raise ValueError("selection reason and first step must be non-empty")
+    revised = json.loads(json.dumps(plan))
+    revised["contract_version"] = "unconventional-moves/v0.2"
+    for move in revised["moves"]:
+        move["experiment"] = json.loads(json.dumps(experiments[move["id"]]))
+    revised["selected_move_id"] = move_id
+    revised["prioritized_action"] = f"Selected {move_id}. Reason: {reason.strip()} First step: {first_step.strip()}"
+    failures = validate_plan_data(revised)
+    if failures:
+        raise ValueError("; ".join(failures))
+    if len((json.dumps(revised, indent=2) + "\n").encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError("promoted revision exceeds the supported JSON byte limit")
+    return revised
+
+
 # The seven labeled prose fields, in order, after id, title, and mechanism.
 RESPONSE_FIELDS = dict(zip(RESPONSE_LABELS, MOVE_FIELDS[3:]))
 
@@ -822,7 +878,26 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--history", type=Path)
     record.add_argument("--output", type=Path, required=True)
     init = commands.add_parser("init", help="Copy a complete synthetic language-practice plan for editing")
+    init.add_argument("--contract", choices=sorted(INIT_EXAMPLES), default="v0.2",
+                      help="v0.2 (default) copies the bounded experiment example; v0.1 copies the free-text example")
     init.add_argument("--output", type=Path, required=True)
+    expdraft = commands.add_parser("experiments-draft",
+                                   help="Prepare an unfilled experiment for every move of a v0.1 plan, for promote")
+    expdraft.add_argument("plan", type=Path)
+    expdraft.add_argument("--output", type=Path, required=True)
+    promote = commands.add_parser(
+        "promote", help="Write a new v0.2 revision of a v0.1 plan from filled experiments and one declared "
+                        "selection; no number is defaulted and no approval is established",
+        description="Add a declared experiment to every move of a version 0.1 plan, record one selected move "
+                    "with a reason and first step, and write the result as a new version 0.2 revision. Every "
+                    "move needs a real experiment: if any baseline is unknown, stay in version 0.1.")
+    promote.add_argument("plan", type=Path)
+    promote.add_argument("--experiments", type=Path, required=True,
+                         help="a JSON object mapping every move ID to its experiment, as experiments-draft writes it")
+    promote.add_argument("--move-id", required=True)
+    promote.add_argument("--reason", required=True)
+    promote.add_argument("--first-step", required=True)
+    promote.add_argument("--output", type=Path, required=True)
     imported = commands.add_parser(
         "import-response", help="Transcribe a structurally valid prose response into a new v0.1 plan for review; "
                                 "nothing in it is verified",
@@ -917,8 +992,14 @@ def main(argv: list[str] | None = None) -> int:
                                        json_input(args.history) if args.history else [])
             emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "init":
-            plan = plan_input(ROOT / "examples/bounded-plan.json")
+            plan = plan_input(ROOT / INIT_EXAMPLES[args.contract])
             emit(json.dumps(plan, indent=2) + "\n", args.output)
+        elif args.command == "experiments-draft":
+            emit(json.dumps(experiments_draft(plan_input(args.plan)), indent=2) + "\n", args.output)
+        elif args.command == "promote":
+            result = promote_plan(plan_input(args.plan), json_input(args.experiments), args.move_id, args.reason,
+                                  args.first_step)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "import-response":
             text = _read_input(read_response_file, args.response)
             declared = json_input(args.sources) if args.sources else None

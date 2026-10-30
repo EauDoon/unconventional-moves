@@ -46,6 +46,7 @@
   "examples/example-plan.json",
   "examples/example-prompts.md",
   "examples/example-response.md",
+  "examples/promote-experiments.json",
   "examples/replay-handoff.py",
   "package-manifest.json",
   "schemas/moves-v0.2.schema.json",
@@ -71,6 +72,7 @@
   "tests/test_handoff_restore.py",
   "tests/test_import.py",
   "tests/test_package.py",
+  "tests/test_promote.py",
   "tests/test_response.py",
   "tests/test_validate.py",
   "tests/test_workflow.py"

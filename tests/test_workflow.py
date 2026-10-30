@@ -877,7 +877,7 @@ class VersionGateTests(unittest.TestCase):
     def test_docstring_lists_every_gated_command(self):
         import moves_cli
         listed = moves_cli.__doc__.split("Rules:")[0]
-        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS):
+        for command in sorted(moves_cli.V02_REQUIRED_COMMANDS | moves_cli.V01_REQUIRED_COMMANDS):
             with self.subTest(command=command):
                 self.assertRegex(listed, r"(?<![\w-])" + command + r"(?![\w-])")
         self.assertIn("single source of\ntruth for behavior", listed)

@@ -1,0 +1,62 @@
+{
+  "move-01": {
+    "hypothesis": "The proposed precommitment mechanism may improve practice blocks starting within fifteen minutes of the cue.",
+    "metric": "practice blocks starting within fifteen minutes of the cue",
+    "baseline": 0,
+    "target": 2,
+    "direction": "increase",
+    "start_within_hours": 24,
+    "duration_hours": 48,
+    "max_minutes": 20,
+    "exposure": "self_only",
+    "rollback": "Remove the temporary practice aid and return to the previous private routine."
+  },
+  "move-02": {
+    "hypothesis": "The proposed subtraction mechanism may improve sessions starting without a search step.",
+    "metric": "sessions starting without a search step",
+    "baseline": 0,
+    "target": 2,
+    "direction": "increase",
+    "start_within_hours": 24,
+    "duration_hours": 48,
+    "max_minutes": 40,
+    "exposure": "self_only",
+    "rollback": "Remove the temporary practice aid and return to the previous private routine."
+  },
+  "move-03": {
+    "hypothesis": "The proposed feedback mechanism may improve completion marks recorded within five minutes.",
+    "metric": "completion marks recorded within five minutes",
+    "baseline": 0,
+    "target": 2,
+    "direction": "increase",
+    "start_within_hours": 24,
+    "duration_hours": 48,
+    "max_minutes": 25,
+    "exposure": "self_only",
+    "rollback": "Remove the temporary practice aid and return to the previous private routine."
+  },
+  "move-04": {
+    "hypothesis": "The proposed constraint removal mechanism may improve fallback sessions completed without extending the day.",
+    "metric": "fallback sessions completed without extending the day",
+    "baseline": 0,
+    "target": 1,
+    "direction": "increase",
+    "start_within_hours": 24,
+    "duration_hours": 48,
+    "max_minutes": 2,
+    "exposure": "self_only",
+    "rollback": "Remove the temporary practice aid and return to the previous private routine."
+  },
+  "move-05": {
+    "hypothesis": "The proposed inversion mechanism may improve usable interruption responses prepared.",
+    "metric": "usable interruption responses prepared",
+    "baseline": 0,
+    "target": 1,
+    "direction": "increase",
+    "start_within_hours": 24,
+    "duration_hours": 48,
+    "max_minutes": 5,
+    "exposure": "self_only",
+    "rollback": "Remove the temporary practice aid and return to the previous private routine."
+  }
+}

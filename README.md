@@ -194,7 +194,11 @@ A prose response converts to a v0.1 plan with `moves.py import-response`,
 because prose carries no numeric experiment fields.
 
 Use v0.1 when meaningful numeric baselines are unknown, and identify what needs
-measuring. Do not invent numbers to force v0.2. Version 0.2 retains a start bound
+measuring. Do not invent numbers to force v0.2. `moves.py init --contract v0.1`
+starts from the free-text example. Once every move has a real baseline,
+`moves.py experiments-draft` writes an unfilled experiment per move and
+`moves.py promote` writes a new v0.2 revision from the filled file plus one
+declared selection, never defaulting a number or changing the input. Version 0.2 retains a start bound
 of 0 to 48 hours and duration of 1 to 48 hours. Test a narrow uncertainty within
 that window rather than implying a long-term hypothesis has been proved.
 The installed skill bundles both schemas and its strategy review reference.
@@ -202,11 +206,11 @@ The installed skill bundles both schemas and its strategy review reference.
 ## Integration notes
 
 For concrete offline workflows using the bundled examples, see
-[usage recipes](docs/usage-recipes.md); six copy-paste recipes cover v0.1
+[usage recipes](docs/usage-recipes.md); seven copy-paste recipes cover v0.1
 rendering, v0.2 selection and cards, the synthetic outcome replay,
 cumulative checkpoint histories with CSV export, the combined
-constraint shortlist and source date audit, and importing a prose response
-as a plan. To choose between the two
+constraint shortlist and source date audit, importing a prose response
+as a plan, and promoting a v0.1 plan to v0.2. To choose between the two
 schema versions using the actual required fields, the experiment card
 bounds, and the CLI version gate, see the
 [version decision tree](docs/version-decision.md). Both docs rely only on

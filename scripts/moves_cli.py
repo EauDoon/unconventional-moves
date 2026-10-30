@@ -4,8 +4,9 @@
 Thin wrapper that reads a plan's contract_version and forwards every
 argument to moves.main() unchanged. The shim exists so a v0.2-only
 command (card, debrief, handoff, limits, observation-draft, outcome,
-record, screen, select, table, timeline) refuses a v0.1 input with a
-clear message at the CLI boundary, instead of letting moves.py raise a
+record, screen, select, table, timeline) refuses a v0.1 input, and a
+v0.1-only command (experiments-draft, promote) refuses a v0.2 input, with
+a clear message at the CLI boundary, instead of letting moves.py raise a
 less specific ValueError after parsing the plan.
 
 The underlying moves.py stays untouched and remains the single source of
@@ -15,6 +16,7 @@ gate. Top-level options such as --version pass through to moves.py.
 Rules:
 - plan-required commands, using the first positional plan path:
   v0.2-only commands on a v0.1 plan are refused with exit 1.
+  v0.1-only commands on a v0.2 plan are refused with exit 1.
   shared commands pass through to moves.main() unchanged.
   Optional flags may precede the plan; every option of a version-gated
   command takes a value.
@@ -48,6 +50,10 @@ V02_REQUIRED_COMMANDS = frozenset({
     "card", "debrief", "handoff", "limits", "observation-draft", "outcome",
     "record", "screen", "select", "table", "timeline",
 })
+
+# Commands that turn a v0.1 plan into a v0.2 revision. moves.py also refuses
+# a v0.2 input for them, so this gate only refuses it earlier.
+V01_REQUIRED_COMMANDS = frozenset({"experiments-draft", "promote"})
 
 # Commands that accept either v0.1 or v0.2 plans at argv[1].
 SHARED_COMMANDS = frozenset({
@@ -104,7 +110,7 @@ def gate_version(command: str, argv: list[str]) -> int | None:
         return None
     if command in NO_PLAN_COMMANDS:
         return None
-    if command not in V02_REQUIRED_COMMANDS and command not in SHARED_COMMANDS:
+    if command not in V02_REQUIRED_COMMANDS | V01_REQUIRED_COMMANDS | SHARED_COMMANDS:
         return None
     plan = plan_argument(argv)
     if plan is None:
@@ -123,6 +129,9 @@ def gate_version(command: str, argv: list[str]) -> int | None:
             "FAIL " + command + " requires a v0.2 plan; input declares " + version,
             file=sys.stderr,
         )
+        return 1
+    if command in V01_REQUIRED_COMMANDS and version == "unconventional-moves/v0.2":
+        print("FAIL " + command + " requires a v0.1 plan; input declares " + version, file=sys.stderr)
         return 1
     return None
 
