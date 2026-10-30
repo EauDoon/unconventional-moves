@@ -23,6 +23,26 @@ replacement separately. The project path is explicit and does not depend on an
 unset global configuration variable.
 The installed skill needs no Python, CLI, account, or API key.
 
+With Python 3.11 to 3.14, the installer performs that copy safely from a
+checkout or an extracted package:
+
+```sh
+python scripts/install_skill.py --project path/to/project
+python scripts/install_skill.py --project path/to/project --check
+```
+
+It copies exactly the skill files listed in `package-manifest.json` into
+`<project>/.agents/skills/unconventional-moves`, refuses any existing
+destination (including an empty directory or a symlink), checks every staged
+file against its source, and publishes the directory with one rename, so a
+failure leaves nothing at the destination. `--dest DIR` names an explicit new
+directory for another host instead. `--check` writes nothing: it reports each
+installed file as identical, changed, missing, or extra and exits 0 only when
+the copy is identical. The installer never overwrites, merges, or deletes;
+to upgrade, run `--check`, keep a backup, move the old directory away
+yourself, then install. It reads no environment variable and has no default
+destination.
+
 In that project's Codex session, invoke:
 
 ```text
@@ -251,7 +271,8 @@ builds, so cross-platform byte identity requires testing, not an assumption.
 
 Extract the archive into a fresh directory, verify its checksum against the
 builder's checksum file, then copy the extracted `skill/unconventional-moves`
-directory to the project skill location above. A checksum detects a content
+directory to the project skill location above, or run the extracted
+`scripts/install_skill.py --project <project>`. A checksum detects a content
 mismatch; it does not authenticate the publisher. Packaging does not publish
 or change remote metadata.
 
@@ -280,6 +301,7 @@ Ordinary tests remain offline.
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
 | [Check runner](scripts/check.py) | The CI check set in one command |
+| [Skill installer](scripts/install_skill.py) | Installs the skill into a new directory and checks an installed copy for drift |
 | [Release gate](scripts/versioning.py) | Reads `VERSION`, checks CHANGELOG, and gates tagged releases |
 | [Security](SECURITY.md) | Security scope and reporting guidance |
 | [Contributing](CONTRIBUTING.md) | Contribution and verification rules |

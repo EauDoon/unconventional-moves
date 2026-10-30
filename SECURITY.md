@@ -27,6 +27,17 @@ numbers, and invalid Unicode, and validates documented fields. Output creation
 is exclusive and rejects existing files and destination symlinks. Choose a trusted
 output directory: ancestor directories are user-selected, not a filesystem sandbox.
 
+`scripts/install_skill.py` copies only the skill files listed in
+`package-manifest.json`. It writes a hidden staging directory beside the chosen
+destination, renames it to the destination, and removes the staging directory
+on any failure. It refuses an existing destination, never overwrites, merges,
+or deletes an installed skill, creates `.agents/skills` inside a `--project`
+directory when missing, and reads no environment variable. A hard crash or
+power loss during installation can leave a hidden `.unconventional-skill-*`
+directory holding a partial copy, including a `SKILL.md`, beside the
+destination; delete it yourself before another host scans that skills
+directory. `--check` only reads.
+
 Lexical screens are conservative review aids with false positives and false
 negatives. Neither their results nor schemas certify safety. Sources, selection,
 consent, and observations remain declarations; hashes and recomputed unsigned
