@@ -415,20 +415,38 @@ def handoff_differences(bundle: object, expected: object, path: str = "") -> lis
     return [{"path": path or "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
 
 
-def _mismatch(prefix: str, bundle: dict, expected: dict) -> HandoffMismatch:
-    found = handoff_differences(bundle, expected) or [
-        {"path": "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}]
+def _mismatch_from(prefix: str, found: list[dict]) -> HandoffMismatch:
     shown = ", ".join(item["path"] for item in found[:MISMATCH_PATHS_SHOWN])
     more = len(found) - MISMATCH_PATHS_SHOWN
     return HandoffMismatch(prefix + ": " + shown + (f" and {more} more" if more > 0 else ""), found)
 
 
+def _mismatch(prefix: str, bundle: dict, expected: dict) -> HandoffMismatch:
+    return _mismatch_from(prefix, handoff_differences(bundle, expected) or [
+        {"path": "(root)", "change": "changed", "bundle": bundle, "recomputed": expected}])
+
+
+PLAN_DIGEST_MISMATCH = ("handoff plan_sha256 does not match the plan; the plan or its stored digest "
+                        "was changed after the bundle was written")
+
+
 def _check_plan_digest(bundle: dict) -> None:
+    """Refuse a bundle whose plan and stored digest disagree, naming each plan-derived difference.
+
+    plan_sha256 comes first, then every differing card and review path
+    recomputed from the stored plan. The observation review is not recomputed:
+    each record is bound to the plan digest it was written against.
+    """
     recomputed = plan_digest(bundle["plan"])
-    if bundle["plan_sha256"] != recomputed:
-        raise HandoffMismatch("handoff plan was changed after the bundle was written: plan_sha256 does not match the plan",
-                              [{"path": "plan_sha256", "change": "changed", "bundle": bundle["plan_sha256"],
-                                "recomputed": recomputed}])
+    if bundle["plan_sha256"] == recomputed:
+        return
+    found = [{"path": "plan_sha256", "change": "changed", "bundle": bundle["plan_sha256"], "recomputed": recomputed}]
+    try:
+        derived = {"card": experiment_card(bundle["plan"]), "review": review_plan(bundle["plan"])}
+    except ValueError:
+        derived = {}
+    found.extend(handoff_differences({key: bundle[key] for key in derived}, derived))
+    raise _mismatch_from(PLAN_DIGEST_MISMATCH, found)
 
 
 def mismatch_report(bundle: dict, mismatch: HandoffMismatch) -> dict:
@@ -1043,7 +1061,9 @@ def main(argv: list[str] | None = None) -> int:
     verify = commands.add_parser(
         "verify-handoff", help="Recompute a handoff's internal consistency",
         description="Validate the plan and observations in a handoff and recompute every digest and derived "
-                    "field. A mismatch names the first differing paths; --diff writes every difference as JSON.")
+                    "field. A mismatch names the first differing paths; --diff writes every difference as JSON. "
+                    "When the plan digest does not match, the differences are the digest and the card and review "
+                    "recomputed from the stored plan; observations stay bound to their original digest.")
     verify.add_argument("bundle", type=Path)
     verify.add_argument("--diff", action="store_true",
                         help="on a mismatch, write each differing path with its bundle and recomputed values, "

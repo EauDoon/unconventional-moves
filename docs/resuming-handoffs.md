@@ -47,8 +47,11 @@ message, and `unpack-handoff` still creates no directory:
 
 - `unsupported handoff structure` or `invalid plan`: the bundle is not a
   handoff this tool writes, or its plan breaks the contract.
-- `handoff plan was changed after the bundle was written`: the stored
-  `plan_sha256` does not match the plan, so the plan was edited after export.
+- `handoff plan_sha256 does not match the plan`: the plan or its stored
+  digest was edited after export. The message names `plan_sha256` and each
+  card and review path that differs when recomputed from the stored plan.
+  When `plan_sha256` is the only path, the plan still matches the digest in
+  its card.
 - `handoff observation is invalid` (or `observations are invalid`): the
   supplied record itself breaks the outcome rules, for example more active
   minutes than elapsed time.
@@ -56,7 +59,7 @@ message, and `unpack-handoff` still creates no directory:
   recomputed field differs. Up to five paths are named, such as
   `outcome_review.measurement.progress_fraction`, followed by `and N more`.
 
-For every differing path with the stored and recomputed values, run:
+To list every differing path with the stored and recomputed values, run:
 
 ```sh
 python scripts/moves.py verify-handoff handoff.json --diff --output handoff-diff.json
@@ -64,7 +67,11 @@ python scripts/moves.py verify-handoff handoff.json --diff --output handoff-diff
 
 On a mismatch `--diff` writes `consistent: false`, each path with its change
 (`changed`, `missing`, or `unexpected`), both values, and the advice to rebuild,
-then exits 1; a consistent bundle prints the usual report and exits 0. Do not
+then exits 1; a consistent bundle prints the usual report and exits 0. When
+the plan digest does not match, the list holds `plan_sha256` and the card and
+review paths recomputed from the stored plan; observations are not
+recomputed, because each record is bound to the digest it was written
+against. Do not
 edit a bundle to make it pass. Rebuild it with `handoff` from the source plan
 and observations. A difference shows where the bundle and the recomputation
 disagree; it does not show which one is correct or who changed it.
