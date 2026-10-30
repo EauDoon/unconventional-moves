@@ -84,6 +84,21 @@ class InstallTests(unittest.TestCase):
                     self.assertNotIn("Traceback", result.stderr)
                     self.assertEqual(tree(root), before)
 
+    def test_a_file_in_place_of_the_skills_directory_is_named(self):
+        for layout in (".agents", ".agents/skills"):
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory() as td:
+                project = Path(td)
+                blocker = project / layout
+                blocker.parent.mkdir(parents=True, exist_ok=True)
+                blocker.write_text("keep", encoding="utf-8")
+                before = tree(project)
+                result = run("--project", project)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("a file is in the way", result.stderr)
+                self.assertNotIn("destination already exists", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(tree(project), before)
+
     def test_missing_project_or_parent_is_refused(self):
         with tempfile.TemporaryDirectory() as td:
             result = run("--project", Path(td) / "absent")
