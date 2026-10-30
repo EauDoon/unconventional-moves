@@ -327,13 +327,31 @@ class HandoffDiagnosticsTests(unittest.TestCase):
                 with self.subTest(command=command[0]):
                     result = self.run_cli(*command)
                     self.assertEqual(result.returncode, 1)
-                    self.assertIn('handoff plan was changed after the bundle was written: plan_sha256 does not match '
-                                  'the plan', result.stderr)
+                    self.assertEqual(result.stderr, 'FAIL ' + moves.PLAN_DIGEST_MISMATCH
+                                     + ': plan_sha256, card.goal, card.plan_sha256\n')
                     self.assertNotIn('observation-draft', result.stderr)
             self.assertFalse((Path(td) / 'out').exists())
+            # --diff lists the digest and every card and review path recomputed
+            # from the stored plan; the observation stays bound to its digest.
             report = json.loads(self.run_cli('verify-handoff', path, '--diff').stdout)
-            self.assertEqual([item['path'] for item in report['mismatches']], ['plan_sha256'])
+            self.assertEqual([item['path'] for item in report['mismatches']],
+                             ['plan_sha256', 'card.goal', 'card.plan_sha256'])
             self.assertEqual(report['mismatches'][0]['recomputed'], moves.plan_digest(bad['plan']))
+            self.assertEqual(report['mismatches'][1], {'path': 'card.goal', 'change': 'changed',
+                                                       'bundle': self.plan['goal'], 'recomputed': bad['plan']['goal']})
+
+    def test_digest_only_edit_does_not_claim_the_plan_was_edited(self):
+        self.assertIn('the plan or its stored digest', moves.PLAN_DIGEST_MISMATCH)
+        for bundle in (self.bundle, json.loads(json.dumps(moves.timeline_handoff(self.plan, [self.observation])))):
+            bad = copy.deepcopy(bundle)
+            bad['plan_sha256'] = '0' * 64
+            with self.subTest(contract=bundle['contract_version']):
+                with self.assertRaises(moves.HandoffMismatch) as caught:
+                    moves.verify_handoff(bad)
+                self.assertEqual(str(caught.exception), moves.PLAN_DIGEST_MISMATCH + ': plan_sha256')
+                self.assertEqual(caught.exception.mismatches, [{'path': 'plan_sha256', 'change': 'changed',
+                                                                'bundle': '0' * 64,
+                                                                'recomputed': bundle['plan_sha256']}])
 
     def test_invalid_observation_is_named_as_such(self):
         bad = copy.deepcopy(self.bundle)

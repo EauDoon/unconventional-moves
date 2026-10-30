@@ -32,7 +32,8 @@ output directory: ancestor directories are user-selected, not a filesystem sandb
 destination, renames it to the destination, and removes the staging directory
 on any failure. It refuses an existing destination, never overwrites, merges,
 or deletes an installed skill, creates `.agents/skills` inside a `--project`
-directory when missing, and reads no environment variable. A hard crash or
+directory when missing (refusing when a file stands where either directory
+should be), and reads no environment variable. A hard crash or
 power loss during installation can leave a hidden `.unconventional-skill-*`
 directory holding a partial copy, including a `SKILL.md`, beside the
 destination; delete it yourself before another host scans that skills

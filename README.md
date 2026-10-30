@@ -117,9 +117,12 @@ To check a saved response against this shape, run
 also require a Sources section, or `--json` for a machine-readable report. It
 checks structure only: five to seven numbered ideas with a mechanism, the
 seven fields in order, Sources placement, and one final prioritized action.
-Wrapped lines and fenced examples are handled. A pass says nothing about
-quality, novelty, truth, or safety; a refusal or limitation is reported as
-not a completed plan.
+Text that Markdown renders inside a field joins it, including wrapped,
+unindented, and indented second-paragraph lines; lines end only at LF, CRLF,
+or CR; a Sources heading may be ATX or setext, and a line starting with a
+Sources label counts as one; fenced examples are ignored. A pass says
+nothing about quality, novelty, truth, or safety; a refusal or limitation is
+reported as not a completed plan.
 
 ## Evidence and safety
 

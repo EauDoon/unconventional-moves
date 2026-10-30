@@ -174,8 +174,8 @@ The response passes only the structural check; its content is unverified.
 `imported.json` has IDs `move-01` to `move-05` and is identical to
 `examples/example-plan.json`, because that example response is its prose form.
 A response with a Sources section needs `--sources` with a JSON array of
-declared source records, and `--high-stakes` needs at least one. Prose
-citations are never parsed into sources. The input response is unchanged.
+at least one declared source record, and `--high-stakes` also requires that
+section. Prose citations are never parsed into sources. The input response is unchanged.
 
 ## Recipe 7: Promote a v0.1 plan to v0.2 with declared experiments
 

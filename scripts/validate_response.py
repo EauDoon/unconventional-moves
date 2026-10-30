@@ -31,15 +31,21 @@ SCREENED_LABELS = ("Concrete move", "48-hour test", "Success signal", "Stop cond
 NOT_COMPLETED = "not a completed plan (refusal, limitation, or non-trigger)"
 
 _CANONICAL = {label.casefold(): label for label in LABELS}
+# Patterns run on lines with trailing spaces and tabs already removed, and none
+# ends in a lazy group followed by optional whitespace, so matching stays linear
+# in the line length: a long run of spaces cannot cause quadratic backtracking.
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-_HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$")
-_IDEA = re.compile(r"^###[ \t]+Idea[ \t]+([0-9]+)[ \t]*:[ \t]*(.*?)[ \t]*$")
-_MECHANISM = re.compile(r"^(.*?)[ \t]*\(([^()]*)\)$")
+_CLOSING_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})$")
+_HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*))?$")
+_IDEA = re.compile(r"^###[ \t]+Idea[ \t]+([0-9]+)[ \t]*:[ \t]*(.*)$")
+_SETEXT = re.compile(r"^ {0,3}(?:=+|-+)$")
 _BULLET = re.compile(r"^[-*+][ \t]+(.*)$")
 _BOLD_LABEL = re.compile(r"^\*\*([^*:]+?)(?::\*\*|\*\*:)[ \t]*(.*)$")
 _PLAIN_LABEL = re.compile(r"^([^*:]+?):(?:[ \t]+(.*))?$")
 _PRIORITY = re.compile(r"^(?:\*\*Prioritized action(?::\*\*|\*\*:)|Prioritized action:)[ \t]*(.*)$")
-_BOLD_SOURCES = re.compile(r"^\*\*Sources(?::\*\*|\*\*:?)[ \t]*$", re.IGNORECASE)
+# A Sources marker line: a bold or plain Sources label, alone or followed by text.
+_SOURCES_LINE = re.compile(r"^(?:\*\*Sources(?::\*\*|\*\*:?)|Sources:)(?:[ \t].*)?$", re.IGNORECASE)
 
 
 def _join(parts: list[str]) -> str:
@@ -53,67 +59,115 @@ def _label(content: str) -> tuple[str, str] | None:
     return " ".join(match.group(1).split()), match.group(2) or ""
 
 
+def _mechanism(heading: str) -> tuple[str | None, str | None]:
+    """Split `Title (mechanism)` on the final parenthetical, without backtracking."""
+    start = heading.rfind("(")
+    if not heading.endswith(")") or start < 0 or ")" in heading[start + 1:-1]:
+        return None, None
+    return heading[:start].strip(), heading[start + 1:-1].strip()
+
+
+def _is_break(line: str) -> bool:
+    """A thematic break such as `---`, `***`, or `_ _ _`, indented at most three spaces."""
+    if len(line) - len(line.lstrip(" ")) > 3:
+        return False
+    marks = line.replace(" ", "").replace("\t", "")
+    return len(marks) >= 3 and marks[0] in "-*_" and marks == marks[0] * len(marks)
+
+
+def _is_sources_title(text: str) -> bool:
+    text = text.strip()
+    if len(text) > 4 and text.startswith("**") and text.endswith("**"):
+        text = text[2:-2]
+    return text.rstrip(":").strip().casefold() == "sources"
+
+
+def _interrupts(line: str) -> bool:
+    """A line that starts a new block instead of continuing a paragraph."""
+    return bool(_HEADING.match(line) or _BULLET.match(line) or _SOURCES_LINE.match(line)
+                or _PRIORITY.match(line) or _FENCE.match(line) or _SETEXT.match(line) or _is_break(line))
+
+
 def parse_response(text: str) -> dict:
     """Return the ideas, labeled fields, Sources markers, and priority paragraphs.
 
-    Fenced code blocks are ignored. An indented non-blank line directly after
-    a labeled bullet continues it, and the lines directly after a priority
-    label continue that paragraph. Every field keeps its text with runs of
-    whitespace joined into single spaces.
+    Lines end only at LF, CRLF, or CR, as in Markdown. Fenced code blocks are
+    ignored, and a fence closes only on a run of its own character at least as
+    long as the one that opened it. A labeled bullet keeps every line that
+    renders inside it: the lines that follow it up to a blank line, indented or
+    not, and indented paragraphs after a blank line. The lines after a priority
+    label continue that paragraph until a blank line or a new block. A Sources
+    marker is a heading of any level (ATX or setext) titled Sources, or a line
+    that starts with a bold or plain Sources label. Every field keeps its text
+    with runs of whitespace joined into single spaces.
     """
     if text.startswith("﻿"):
         text = text[1:]
-    lines = text.splitlines()
+    lines = _LINE_BREAK.split(text)
     ideas: list[dict] = []
     sources: list[int] = []
     priorities: list[dict] = []
     current: dict | None = None
     open_field: list[str] | None = None
+    field_gap = False
     open_priority: list[str] | None = None
+    paragraph_line: int | None = None
+    paragraph_start = 0
     fence: str | None = None
     content_lines: list[int] = []
-    for number, line in enumerate(lines):
+    for number, raw in enumerate(lines):
+        line = raw.rstrip(" \t")
         if fence is not None:
-            if line.lstrip(" ").startswith(fence):
+            closing = _CLOSING_FENCE.match(line)
+            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
                 fence = None
             continue
         opening = _FENCE.match(line)
         if opening:
-            fence = opening.group(1)[:3]
-            open_field = open_priority = None
+            fence = opening.group(1)
+            open_field = open_priority = paragraph_line = None
             content_lines.append(number)
             continue
         if not line.strip():
-            open_field = open_priority = None
+            field_gap = True
+            open_priority = paragraph_line = None
             continue
         content_lines.append(number)
         if open_priority is not None:
-            # A heading, list item, or new marker interrupts the paragraph.
-            if not (_HEADING.match(line) or _BULLET.match(line) or _BOLD_SOURCES.match(line)
-                    or _PRIORITY.match(line)):
+            if not _interrupts(line):
                 open_priority.append(line)
                 continue
             open_priority = None
-        if open_field is not None and line[:1] in (" ", "\t") and not _HEADING.match(line):
-            open_field.append(line)
+        if open_field is not None:
+            indented = line[:1] in (" ", "\t")
+            if (not field_gap and not _interrupts(line)) or (field_gap and indented and not _HEADING.match(line)):
+                open_field.append(line)
+                field_gap = False
+                continue
+            open_field = None
+        if _SETEXT.match(line) and paragraph_line == number - 1:
+            # The plain paragraph above is a setext heading, which ends an idea.
+            current = paragraph_line = None
+            if _is_sources_title(" ".join(lines[paragraph_start:number])):
+                sources.append(paragraph_start)
             continue
-        open_field = None
+        continued = paragraph_line == number - 1
+        paragraph_line = None
         idea = _IDEA.match(line)
         if idea:
             heading = idea.group(2)
-            parts = _MECHANISM.match(heading)
+            title, mechanism = _mechanism(heading)
             current = {"number": int(idea.group(1)), "line": number, "heading": heading,
-                       "title": parts.group(1).strip() if parts else None,
-                       "mechanism": parts.group(2).strip() if parts else None, "fields": []}
+                       "title": title, "mechanism": mechanism, "fields": []}
             ideas.append(current)
             continue
         heading = _HEADING.match(line)
         if heading:
             current = None
-            if (heading.group(2) or "").rstrip(":").strip().casefold() == "sources":
+            if _is_sources_title(heading.group(2) or ""):
                 sources.append(number)
             continue
-        if _BOLD_SOURCES.match(line):
+        if _SOURCES_LINE.match(line):
             current = None
             sources.append(number)
             continue
@@ -124,11 +178,17 @@ def parse_response(text: str) -> dict:
             priorities.append({"line": number, "parts": open_priority})
             continue
         bullet = _BULLET.match(line)
-        if bullet and current is not None:
-            labeled = _label(bullet.group(1))
+        if bullet:
+            labeled = _label(bullet.group(1)) if current is not None else None
             if labeled is not None:
                 open_field = [labeled[1]]
+                field_gap = False
                 current["fields"].append({"label": labeled[0], "parts": open_field})
+            continue
+        if not _is_break(line):
+            if not continued:
+                paragraph_start = number
+            paragraph_line = number
     for idea in ideas:
         idea["fields"] = [{"label": field["label"], "text": _join(field["parts"])} for field in idea["fields"]]
     for priority in priorities:

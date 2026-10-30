@@ -127,7 +127,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise InstallError("the project directory does not exist")
             destination = args.project / ".agents" / "skills" / SKILL_NAME
             if not args.check:
-                destination.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                except (FileExistsError, NotADirectoryError):
+                    raise InstallError("cannot create .agents/skills in the project: a file is in the way "
+                                       "(.agents or .agents/skills is not a directory)") from None
         else:
             destination = args.dest
         if args.check:
