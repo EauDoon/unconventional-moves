@@ -13,6 +13,7 @@ The root `VERSION` file is the single source of the package version, and
 
 - Report a checked file that is not UTF-8 as a failure instead of raising `UnicodeDecodeError`. `scripts/validate.py` decoded `SKILL.md`, `README.md`, `agents/openai.yaml`, `schemas/moves.schema.json`, and `examples/adversarial-fixtures.json` without an encoding guard, so a single non-UTF-8 byte ended the repository gate with a Python traceback instead of a diagnostic. The Markdown link check already reported this condition; the remaining read paths report it the same way and the run continues, so every other check still runs and reports.
 - Report repository JSON of an unexpected shape as a failure instead of raising. `scripts/validate.py` assumed the shapes of `schemas/moves.schema.json` and `examples/adversarial-fixtures.json`, so valid JSON such as an array-form `items` or a non-array `required` in the schema, a fixture case that is not an object, or a fixture ID that is not a string ended the repository gate with an `AttributeError` or `TypeError` traceback. These now fail the existing schema checks or a new `adversarial fixtures are objects with string IDs` check, and the run continues.
+- Report an eval fixture tag that is a list or an object as a case failure. `evals/runner.py` checked tag uniqueness with `set()` before checking tag types, so such a tag raised `TypeError` and stopped the runner with a traceback instead of printing `FAIL` for that case.
 
 ## [0.3.0] - 2026-10-09
 
