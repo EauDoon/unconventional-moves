@@ -52,6 +52,18 @@ class ImportTests(unittest.TestCase):
         plan = import_response(text, GOAL)
         self.assertEqual(plan, EXAMPLE_PLAN)
 
+    def test_lazy_lines_and_separators_inside_a_field_are_imported_not_dropped(self):
+        original = "- **Concrete move:** Reserve a ten-minute practice block immediately after one existing daily cue."
+        example = EXAMPLE_RESPONSE.read_text(encoding="utf-8")
+        for wrapped in ("- **Concrete move:** Reserve a ten-minute practice block\nimmediately after one existing daily cue.",
+                        "- **Concrete move:** Reserve a ten-minute practice block\u2028immediately after one existing daily cue."):
+            with self.subTest(wrapped=repr(wrapped[-40:])):
+                self.assertEqual(import_response(example.replace(original, wrapped), GOAL), EXAMPLE_PLAN)
+        why = "- **Why overlooked:** The plan is treated as a separate appointment instead of a cue-linked habit."
+        plan = import_response(example.replace(why, why + "\n\n  It also fails when the cue itself moves."), GOAL)
+        self.assertEqual(plan["moves"][0]["why_overlooked"], "The plan is treated as a separate appointment "
+                                                             "instead of a cue-linked habit. It also fails when the cue itself moves.")
+
     def test_sources_come_only_from_declared_records_and_high_stakes_needs_one(self):
         text = with_sources(EXAMPLE_RESPONSE.read_text(encoding="utf-8"))
         with self.assertRaisesRegex(ValueError, "supply the declared records with --sources"):
@@ -136,6 +148,9 @@ class RefusalTests(unittest.TestCase):
         cases = {
             "sources after priority": (example + "\n## Sources\n\n- A record.\n", (), None,
                                        "the Sources section must come before the prioritized action"),
+            "sources line attached to the priority": (
+                example.rstrip("\n") + "\n**Sources:** Synthetic survey, https://example.test/survey\n", (), None,
+                "the Sources section must come before the prioritized action"),
             "four ideas": (example[:cut] + example[priority:], (), None, "five to seven ideas; found 4"),
             "not completed": ("I cannot propose moves for this goal.\n", (), None,
                               "not a completed plan (refusal, limitation, or non-trigger)"),

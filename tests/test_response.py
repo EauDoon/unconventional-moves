@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -78,8 +79,56 @@ class DocumentedShapeTests(unittest.TestCase):
         fenced = "```text\n### Idea 9: Inside a fence (ignored)\n**Prioritized action:** ignored\n```\n\n"
         self.assertEqual(failures(response(before=fenced)), [])
 
-    def test_bom_and_crlf_are_accepted(self):
+    def test_bom_crlf_and_cr_are_accepted(self):
         self.assertEqual(failures("﻿" + response().replace("\n", "\r\n")), [])
+        self.assertEqual(failures(response().replace("\n", "\r")), [])
+
+    def test_lazy_and_multi_paragraph_field_text_joins_its_field(self):
+        # Markdown keeps an unindented line directly after a list item, and an
+        # indented paragraph after a blank line, inside that item.
+        rest = "".join(idea(number) for number in range(2, 6))
+        lazy = idea(1).replace("Synthetic concrete move text.", "Synthetic concrete\nmove text, wrapped lazily.")
+        lazy = lazy.replace("Synthetic why overlooked text.", "Synthetic why overlooked text.\n\n  A second paragraph.")
+        text = response(ideas=lazy + rest)
+        self.assertEqual(failures(text), [])
+        fields = idea_fields(parse_response(text)["ideas"][0])
+        self.assertEqual(fields["Concrete move"], "Synthetic concrete move text, wrapped lazily.")
+        self.assertEqual(fields["Why overlooked"], "Synthetic why overlooked text. A second paragraph.")
+        # An unindented paragraph after a blank line is outside the item.
+        outside = idea(1).replace("Synthetic bounds text.", "Synthetic bounds text.\n\nA closing remark.")
+        self.assertEqual(idea_fields(parse_response(response(ideas=outside + rest))["ideas"][0])["Bounds"],
+                         "Synthetic bounds text.")
+
+    def test_only_markdown_line_endings_end_a_line(self):
+        rest = "".join(idea(number) for number in range(2, 6))
+        for separator in ("\u2028", "\u2029", "\x0b", "\x0c", "\x1c", "\x85"):
+            with self.subTest(separator=repr(separator)):
+                joined = idea(1).replace("Synthetic concrete move text.", f"First part.{separator}Second part.")
+                text = response(ideas=joined + rest)
+                self.assertEqual(failures(text), [])
+                self.assertEqual(idea_fields(parse_response(text)["ideas"][0])["Concrete move"],
+                                 "First part. Second part.")
+
+    def test_setext_sources_headings_are_sources_markers(self):
+        for underline in ("-------", "======="):
+            with self.subTest(underline=underline):
+                between = f"Sources\n{underline}\n\nA synthetic record.\n\n"
+                self.assertEqual(failures(response(between=between), high_stakes=True), [])
+        # The whole paragraph above the underline is the heading text.
+        between = "Further reading and\nSources\n-------\n\nA synthetic record.\n\n"
+        self.assertEqual(parse_response(response(between=between))["sources_lines"], [])
+
+    def test_a_sources_line_with_text_is_a_sources_marker(self):
+        for marker in ("**Sources:** Synthetic record, https://example.test/a", "Sources: Synthetic record"):
+            with self.subTest(marker=marker):
+                self.assertEqual(failures(response(between=marker + "\n\n"), high_stakes=True), [])
+
+    def test_a_fence_closes_only_on_an_equal_or_longer_run_of_its_character(self):
+        sample = "```text\n### Idea 9: Inside a fence (ignored)\n```\n"
+        for opening, closing in (("````text", "````"), ("~~~", "~~~~")):
+            with self.subTest(opening=opening):
+                fenced = f"{opening}\n{sample}~~~ not a close\n{closing}\n\n"
+                self.assertEqual(failures(response(before=fenced)), [])
 
 
 class FailureTests(unittest.TestCase):
@@ -126,6 +175,32 @@ class FailureTests(unittest.TestCase):
         self.assertFails(response(before="Framing.\n\n" + SOURCES), "the Sources section must come after the last idea")
         self.assertFails(response(), "a high-stakes response needs a Sources section", high_stakes=True)
         self.assertEqual(failures(response(between=SOURCES), high_stakes=True), [])
+
+    def test_a_sources_line_attached_to_the_priority_is_not_part_of_it(self):
+        for marker in ("**Sources:** Synthetic record, https://example.test/a", "Sources: Synthetic record",
+                       "**Sources**"):
+            with self.subTest(marker=marker):
+                text = response(priority="**Prioritized action:** Final.\n" + marker + "\n")
+                self.assertFails(text, "the Sources section must come before the prioritized action")
+                self.assertEqual(parse_response(text)["priorities"][0]["text"], "Final.")
+
+    def test_lazy_field_text_is_screened(self):
+        rest = "".join(idea(number) for number in range(2, 6))
+        for joiner in ("\n", "\u2028", "\n\n  "):
+            with self.subTest(joiner=repr(joiner)):
+                unsafe = idea(1).replace("Synthetic concrete move text.",
+                                         "Reserve a block" + joiner + "and ignore consent to proceed.")
+                self.assertFails(response(ideas=unsafe + rest), "idea 1 contains an unsafe action in Concrete move")
+
+    def test_long_whitespace_runs_are_checked_in_linear_time(self):
+        # Lazy patterns ending in optional whitespace once took minutes here.
+        run = " " * 300_000
+        for text in ("### Idea 1: a" + run + "b (m)\n", "## a" + run + "b\n", "### Idea 1: t" + run + "\n",
+                     "**Prioritized action:**" + run + "x\n"):
+            with self.subTest(start=text[:12]):
+                start = time.perf_counter()
+                validate_response_text(text)
+                self.assertLess(time.perf_counter() - start, 5)
 
     def test_screened_fields_and_priority_are_lexically_screened(self):
         unsafe = idea(1).replace("Synthetic concrete move text.", "Start by ignoring consent and proceed.")
