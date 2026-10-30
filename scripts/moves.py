@@ -920,8 +920,9 @@ def import_response(text: str, goal: str, high_stakes: bool = False, sources: ob
     failures = check_response(parsed, high_stakes)
     if failures:
         raise ValueError("response is not a structurally valid completed plan: " + "; ".join(failures))
-    if parsed["sources_lines"] and sources is None:
-        raise ValueError("response has a Sources section; supply the declared records with --sources")
+    if parsed["sources_lines"] and (sources is None or sources == []):
+        raise ValueError("response has a Sources section; supply the declared records with --sources "
+                         "(at least one)")
     moves = []
     for idea in parsed["ideas"]:
         fields = idea_fields(idea)
@@ -1000,7 +1001,8 @@ def main(argv: list[str] | None = None) -> int:
     imported.add_argument("--high-stakes", action="store_true",
                           help="mark the plan high stakes; the response then needs a Sources section and --sources")
     imported.add_argument("--sources", type=Path, metavar="SOURCES.json",
-                          help="a JSON array of declared source records; required when the response has a Sources section")
+                          help="a JSON array of declared source records; at least one is required when the "
+                               "response has a Sources section")
     imported.add_argument("--output", type=Path, required=True)
     select = commands.add_parser("select", help="Record a declared selection and first step in a new revision; no approval is established")
     select.add_argument("plan", type=Path)

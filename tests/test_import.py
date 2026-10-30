@@ -70,8 +70,11 @@ class ImportTests(unittest.TestCase):
             import_response(text, GOAL)
         plan = import_response(text, GOAL, high_stakes=True, sources=[SOURCE])
         self.assertEqual((plan["high_stakes"], plan["sources"]), (True, [SOURCE]))
-        with self.assertRaisesRegex(ValueError, "high-stakes plan requires at least one declared source"):
-            import_response(text, GOAL, high_stakes=True, sources=[])
+        # A Sources section needs at least one declared record, high stakes or not.
+        for high_stakes in (False, True):
+            with self.subTest(high_stakes=high_stakes):
+                with self.assertRaisesRegex(ValueError, r"supply the declared records with --sources \(at least one\)"):
+                    import_response(text, GOAL, high_stakes=high_stakes, sources=[])
         # Declared records may accompany a response that cites nothing.
         self.assertEqual(import_response(EXAMPLE_RESPONSE.read_text(encoding="utf-8"), GOAL, sources=[SOURCE])["sources"],
                          [SOURCE])
@@ -155,8 +158,10 @@ class RefusalTests(unittest.TestCase):
             "not completed": ("I cannot propose moves for this goal.\n", (), None,
                               "not a completed plan (refusal, limitation, or non-trigger)"),
             "sources without records": (with_sources(example), (), None, "supply the declared records with --sources"),
+            "sources section with an empty array": (with_sources(example), (), "[]",
+                                                    "supply the declared records with --sources (at least one)"),
             "high stakes with no source": (with_sources(example), ("--high-stakes",), "[]",
-                                           "high-stakes plan requires at least one declared source"),
+                                           "supply the declared records with --sources (at least one)"),
             "sources not an array": (example, (), json.dumps(SOURCE), "sources must be an array"),
             "bad source URL": (example, (), json.dumps([{**SOURCE, "url": "ftp://example.test/a"}]),
                                "source 1 URL must use http or https"),
