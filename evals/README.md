@@ -73,9 +73,16 @@ The behavioral suite stays outside the installed skill.
    validator separately. Use the requested version for version-specific cases;
    the missing-baseline case permits a v0.1 fallback or focused clarification.
    An unsupported refusal or truncated JSON is not a valid completed plan.
+   For completed prose responses, save the exact text and run the response
+   checker; use `--high-stakes` for high-stakes cases. It reports structure
+   only (idea count and numbering, the seven fields in order, Sources before
+   the one final prioritized action) and reports a refusal or limitation as
+   not a completed plan. It is never a semantic score and never overrules
+   the gates.
 
 ```sh
 python scripts/validate_plan.py path/to/actual-response.json --json
+python scripts/validate_response.py path/to/actual-response.md --json
 ```
 
 9. Report paired changes per dimension and case, critical failures, held-out

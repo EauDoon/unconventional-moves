@@ -9,6 +9,10 @@ The root `VERSION` file is the single source of the package version, and
 
 ## [Unreleased]
 
+### Added
+
+- Add `scripts/validate_response.py`, a structural checker for the skill's prose output. It checks five to seven `### Idea N: Title (mechanism)` blocks numbered from 1, the seven labeled fields in order with visible text, a Sources section (any heading level, or a standalone bold line) after the ideas and before the end, and exactly one closing prioritized action paragraph with nothing after it. Wrapped bullet and priority lines join their field, fenced code is ignored, and the same lexical screen as the plan validator covers the action, test, signal, stop, and priority text. `--high-stakes` also requires Sources, `--json` prints a machine report, and a refusal or limitation is reported as not a completed plan. Exit 0 means a valid shape, 1 an invalid or unreadable file, 2 bad arguments. Until now only JSON output had a deterministic check, so a prose answer with Sources after the final action, the defect class fixed in 0.3.0, went unnoticed. All 12 revised completed responses in the recorded probe pass, and the two baseline responses with that defect fail on it. `examples/example-response.md` is the prose form of `examples/example-plan.json`, and `scripts/check.py` now runs eight checks, including this one on that example.
+
 ### Fixed
 
 - Report a checked file that is not UTF-8 as a failure instead of raising `UnicodeDecodeError`. `scripts/validate.py` decoded `SKILL.md`, `README.md`, `agents/openai.yaml`, `schemas/moves.schema.json`, and `examples/adversarial-fixtures.json` without an encoding guard, so a single non-UTF-8 byte ended the repository gate with a Python traceback instead of a diagnostic. The Markdown link check already reported this condition; the remaining read paths report it the same way and the run continues, so every other check still runs and reports.

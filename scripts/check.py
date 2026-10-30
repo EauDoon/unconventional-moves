@@ -28,6 +28,7 @@ CHECKS: tuple[tuple[str, ...], ...] = (
     ("scripts/validate.py",),
     ("scripts/validate_plan.py", "examples/example-plan.json"),
     ("scripts/validate_plan.py", "examples/bounded-plan.json", "--json"),
+    ("scripts/validate_response.py", "examples/example-response.md"),
     ("scripts/moves.py", "outcome", "examples/bounded-plan.json", "examples/bounded-outcome.json"),
     ("-m", "unittest", "discover", "-s", "tests", "-v"),
     ("evals/runner.py",),

@@ -45,6 +45,7 @@
   "examples/bounded-plan.json",
   "examples/example-plan.json",
   "examples/example-prompts.md",
+  "examples/example-response.md",
   "examples/replay-handoff.py",
   "package-manifest.json",
   "schemas/moves-v0.2.schema.json",
@@ -56,6 +57,7 @@
   "scripts/package.py",
   "scripts/validate.py",
   "scripts/validate_plan.py",
+  "scripts/validate_response.py",
   "scripts/versioning.py",
   "skill/unconventional-moves/SKILL.md",
   "skill/unconventional-moves/agents/openai.yaml",
@@ -68,6 +70,7 @@
   "tests/test_evals.py",
   "tests/test_handoff_restore.py",
   "tests/test_package.py",
+  "tests/test_response.py",
   "tests/test_validate.py",
   "tests/test_workflow.py"
 ]

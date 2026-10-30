@@ -92,6 +92,15 @@ Unsafe goals, contradictory constraints, or fewer than five feasible distinct
 options warrant a refusal, limitation, or focused question. The skill must not
 pad the answer or emit an invalid plan disguised as a completed result.
 
+To check a saved response against this shape, run
+`python scripts/validate_response.py response.md`; add `--high-stakes` to
+also require a Sources section, or `--json` for a machine-readable report. It
+checks structure only: five to seven numbered ideas with a mechanism, the
+seven fields in order, Sources placement, and one final prioritized action.
+Wrapped lines and fenced examples are handled. A pass says nothing about
+quality, novelty, truth, or safety; a refusal or limitation is reported as
+not a completed plan.
+
 ## Evidence and safety
 
 Supplied claims are not independently checked facts. Inference and speculation
@@ -202,7 +211,7 @@ python scripts/check.py
 ```
 
 It runs, in order and stopping at the first failure: `scripts/validate.py`,
-both example plan validators, the synthetic outcome replay,
+both example plan validators, the example response check, the synthetic outcome replay,
 `python -m unittest discover -s tests -v`, the offline eval fixture runner
 `evals/runner.py`, and a package build into a temporary directory.
 `python scripts/check.py --list` prints the exact commands. To build a package
@@ -251,6 +260,7 @@ Ordinary tests remain offline.
 | [Invocation metadata](skill/unconventional-moves/agents/openai.yaml) | Display name, prompt, and implicit invocation policy |
 | [Worksheet](templates/worksheet.md) | Copy-ready brief and move template |
 | [Plan validator](scripts/validate_plan.py) | Structural validation and limited lexical screening |
+| [Response checker](scripts/validate_response.py) | Structural check of a prose response against the output shape |
 | [Local CLI](scripts/moves.py) | Offline review and observation tracking |
 | [Package builder](scripts/package.py) | Manifest-based archive and checksum |
 | [Check runner](scripts/check.py) | The CI check set in one command |

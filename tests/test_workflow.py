@@ -841,6 +841,7 @@ class CheckRunnerTests(unittest.TestCase):
         for expected in ("python scripts/validate.py",
                          "python scripts/validate_plan.py examples/example-plan.json",
                          "python scripts/validate_plan.py examples/bounded-plan.json --json",
+                         "python scripts/validate_response.py examples/example-response.md",
                          "python scripts/moves.py outcome examples/bounded-plan.json examples/bounded-outcome.json",
                          "python -m unittest discover -s tests -v",
                          "python evals/runner.py"):
