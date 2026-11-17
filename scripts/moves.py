@@ -336,9 +336,9 @@ def compare_plans(before: dict, after: dict) -> dict:
             if field == "experiment" or field.startswith("experiment.") or field in {"mechanism", "concrete_move", "why_overlooked", "test_48h",
                                                           "bounds", "stop_condition", "success_signal", "evidence_status"}:
                 reason = "experiment_or_review_condition_changed"
-                before, after = item["before"], item["after"]
+                old_value, new_value = item["before"], item["after"]
                 if (field in {"experiment.max_minutes", "experiment.duration_hours", "experiment.start_within_hours"}
-                        and type(before) is int and type(after) is int and after > before):
+                        and type(old_value) is int and type(new_value) is int and new_value > old_value):
                     reason = "declared_time_bound_expanded"
                 triggers.append({"move_id": move["move_id"], "field": field, "reason": reason})
     for move_id in sorted(old.keys() ^ new.keys()):

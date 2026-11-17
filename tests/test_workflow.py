@@ -481,6 +481,18 @@ class SelectionTests(unittest.TestCase):
             self.assertIn(field.replace("_", " ").title(), output)
         self.assertIn("none verified", output)
 
+    def test_revision_digests_bind_complete_plans_after_field_changes(self):
+        from moves import compare_plans, plan_digest
+        before = bounded_example()
+        for field, value in (("max_minutes", 30), ("hypothesis", "A revised fictional hypothesis.")):
+            with self.subTest(field=field):
+                after = copy.deepcopy(before)
+                after["moves"][0]["experiment"][field] = value
+                result = compare_plans(before, after)
+                self.assertEqual(result["before_sha256"], plan_digest(before))
+                self.assertEqual(result["after_sha256"], plan_digest(after))
+                self.assertTrue(result["observation_binding_changed"])
+
     def test_revision_review_identifies_expanded_bounds_and_context_changes(self):
         from moves import compare_plans
         before = bounded_example()
