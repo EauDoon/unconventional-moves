@@ -9,6 +9,10 @@ The root `VERSION` file is the single source of the package version, and
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject non-regular JSON input files without waiting for a named-pipe writer. Keep byte limits and descriptor-based checks on ordinary files.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added

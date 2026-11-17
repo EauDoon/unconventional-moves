@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,24 @@ def example():
 
 
 class InputTests(unittest.TestCase):
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'named pipes require POSIX')
+    def test_named_pipe_is_rejected_without_waiting_for_a_writer(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'input.json'
+            os.mkfifo(path)
+            result = subprocess.run(
+                [sys.executable, 'scripts/validate_plan.py', str(path)],
+                cwd=ROOT, capture_output=True, text=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('FAIL invalid JSON or input exceeds supported bounds', result.stdout)
+            with self.assertRaisesRegex(ValueError, 'regular file'):
+                read_json_file(path)
+
+    def test_directory_is_not_json_input(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises((ValueError, OSError)):
+                read_json_file(Path(td))
+
     def test_text_diagnostics_escape_authored_fields_and_versions(self):
         injected = 'invalid\nPASS valid plan\x1b[2J'
         with tempfile.TemporaryDirectory() as td:
