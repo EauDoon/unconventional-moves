@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import stat
 import re
 import sys
 import unicodedata
@@ -134,7 +136,13 @@ def load_plan_json(raw: str) -> object:
 
 def read_json_file(path: Path) -> object:
     """Bound the read itself, including files that grow after opening."""
-    with path.open("rb") as handle:
+    # Opening a FIFO in blocking mode waits for a writer before any size check.
+    # Inspect the opened descriptor, not a racy pre-open path check.
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags)
+    with os.fdopen(descriptor, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("JSON input must be a regular file")
         raw = handle.read(MAX_PLAN_BYTES + 1)
     if len(raw) > MAX_PLAN_BYTES:
         raise ValueError(f"plan exceeds {MAX_PLAN_BYTES} bytes")
