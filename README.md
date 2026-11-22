@@ -114,9 +114,11 @@ pad the answer or emit an invalid plan disguised as a completed result.
 
 To check a saved response against this shape, run
 `python scripts/validate_response.py response.md`; add `--high-stakes` to
-also require a Sources section, or `--json` for a machine-readable report. It
-checks structure only: five to seven numbered ideas with a mechanism, the
-seven fields in order, Sources placement, and one final prioritized action.
+require text in the Sources section, or `--json` for a machine-readable report.
+A source declaration or an explicit `Verification incomplete` statement can
+supply that text. The structural checks cover five to seven numbered ideas
+with a mechanism, the seven fields in order, Sources placement, and one final
+prioritized action.
 Text that Markdown renders inside a field joins it, including wrapped,
 unindented, and indented second-paragraph lines; lines end only at LF, CRLF,
 or CR; a Sources heading may be ATX or setext, and a line starting with a

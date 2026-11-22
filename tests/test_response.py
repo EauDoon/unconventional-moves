@@ -131,6 +131,58 @@ class DocumentedShapeTests(unittest.TestCase):
                 self.assertEqual(failures(response(before=fenced)), [])
 
 
+class HighStakesSourcesTests(unittest.TestCase):
+    def assertEmptySources(self, section):
+        found = failures(response(between=section), high_stakes=True)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("Sources section needs source text", found[0])
+
+    def test_empty_heading_is_present_but_fails_the_cli_check(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "response.md"
+            path.write_bytes(response(between="## Sources\n\n").replace("\n", "\r\n").encode("utf-8"))
+            result = run_cli(path, "--high-stakes", "--json")
+            report = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue(report["sources_section"])
+            self.assertFalse(report["ok"])
+            self.assertIn("Sources section needs source text", report["failures"][0])
+
+    def test_invisible_text_after_a_bold_label_is_empty(self):
+        self.assertEmptySources("**Sources:** \t\u200b\u2060\n\n")
+
+    def test_setext_underline_is_not_source_text(self):
+        self.assertEmptySources("Sources\n=======\n\n")
+
+    def test_draft_list_markup_without_source_text_is_empty(self):
+        self.assertEmptySources("## Sources\n\n- \t\n- \u200b\n1. <!-- Add a reference\n"
+                                "   when available. -->\n\n* * *\n\n")
+
+    def test_fenced_example_is_not_a_source_declaration(self):
+        self.assertEmptySources("## Sources\n\n```text\nSample reference goes here.\n```\n\n")
+
+    def test_a_sibling_section_cannot_fill_empty_sources(self):
+        for heading in ("## Review notes", "Review notes\n------------"):
+            with self.subTest(heading=heading):
+                self.assertEmptySources(f"## Sources\n\n{heading}\n\nDraft for discussion.\n\n")
+
+    def test_inline_and_nested_source_declarations_pass(self):
+        for section in ("Sources: Synthetic review notes, Example publisher.\n\n",
+                        "## Sources\n\n### Published notes\n\n- Synthetic review notes, Example publisher.\n\n"):
+            with self.subTest(section=section):
+                self.assertEqual(failures(response(between=section), high_stakes=True), [])
+
+    def test_explicit_verification_limitation_is_preserved(self):
+        limitation = "Verification incomplete. Request the current reference for review."
+        self.assertEqual(failures(response(between=f"**Sources:** {limitation}\n\n"), high_stakes=True), [])
+        self.assertEqual(failures(limitation, high_stakes=True), [NOT_COMPLETED])
+
+    def test_low_stakes_response_still_allows_optional_sources(self):
+        for section in ("", "## Sources\n\n"):
+            with self.subTest(section=section):
+                self.assertEqual(failures(response(between=section)), [])
+
+
 class FailureTests(unittest.TestCase):
     def assertFails(self, text, expected, high_stakes=False):
         found = failures(text, high_stakes)

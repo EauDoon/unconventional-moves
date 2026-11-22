@@ -144,6 +144,11 @@ class RefusalTests(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
             self.assertIn(expected, result.stderr)
 
+    def test_empty_high_stakes_sources_refuses_import_even_with_declared_records(self):
+        example = EXAMPLE_RESPONSE.read_text(encoding="utf-8")
+        text = example.replace("**Prioritized action:**", "## Sources\n\n**Prioritized action:**")
+        self.refuse(text, "--high-stakes", sources=json.dumps([SOURCE]), expected="Sources section needs source text")
+
     def test_each_refusal_exits_1_and_creates_no_file(self):
         example = EXAMPLE_RESPONSE.read_text(encoding="utf-8")
         cut = example.index("### Idea 5")

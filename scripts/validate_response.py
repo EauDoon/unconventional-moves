@@ -45,7 +45,9 @@ _BOLD_LABEL = re.compile(r"^\*\*([^*:]+?)(?::\*\*|\*\*:)[ \t]*(.*)$")
 _PLAIN_LABEL = re.compile(r"^([^*:]+?):(?:[ \t]+(.*))?$")
 _PRIORITY = re.compile(r"^(?:\*\*Prioritized action(?::\*\*|\*\*:)|Prioritized action:)[ \t]*(.*)$")
 # A Sources marker line: a bold or plain Sources label, alone or followed by text.
-_SOURCES_LINE = re.compile(r"^(?:\*\*Sources(?::\*\*|\*\*:?)|Sources:)(?:[ \t].*)?$", re.IGNORECASE)
+_SOURCES_LINE = re.compile(r"^(?:\*\*Sources(?::\*\*|\*\*:?)|Sources:)(?:[ \t](.*))?$", re.IGNORECASE)
+_LIST_MARKER = re.compile(r"^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]+|$)")
+_HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
 
 
 def _join(parts: list[str]) -> str:
@@ -82,6 +84,12 @@ def _is_sources_title(text: str) -> bool:
     return text.rstrip(":").strip().casefold() == "sources"
 
 
+def _has_source_text(body: list[str]) -> bool:
+    text = _HTML_COMMENT.sub("", "\n".join(body))
+    return any(not _is_break(line) and has_visible_text(_LIST_MARKER.sub("", line, count=1))
+               for line in text.split("\n"))
+
+
 def _interrupts(line: str) -> bool:
     """A line that starts a new block instead of continuing a paragraph."""
     return bool(_HEADING.match(line) or _BULLET.match(line) or _SOURCES_LINE.match(line)
@@ -98,7 +106,8 @@ def parse_response(text: str) -> dict:
     not, and indented paragraphs after a blank line. The lines after a priority
     label continue that paragraph until a blank line or a new block. A Sources
     marker is a heading of any level (ATX or setext) titled Sources, or a line
-    that starts with a bold or plain Sources label. Every field keeps its text
+    that starts with a bold or plain Sources label. A label with no enclosing
+    Sources heading ends at the next heading or priority. Every field keeps its text
     with runs of whitespace joined into single spaces.
     """
     if text.startswith("﻿"):
@@ -106,6 +115,9 @@ def parse_response(text: str) -> dict:
     lines = _LINE_BREAK.split(text)
     ideas: list[dict] = []
     sources: list[int] = []
+    source_level = 0  # A heading at this level or higher ends the Sources section.
+    source_body: list[str] = []
+    source_paragraph_start = 0
     priorities: list[dict] = []
     current: dict | None = None
     open_field: list[str] | None = None
@@ -145,12 +157,6 @@ def parse_response(text: str) -> dict:
                 field_gap = False
                 continue
             open_field = None
-        if _SETEXT.match(line) and paragraph_line == number - 1:
-            # The plain paragraph above is a setext heading, which ends an idea.
-            current = paragraph_line = None
-            if _is_sources_title(" ".join(lines[paragraph_start:number])):
-                sources.append(paragraph_start)
-            continue
         continued = paragraph_line == number - 1
         paragraph_line = None
         idea = _IDEA.match(line)
@@ -160,23 +166,45 @@ def parse_response(text: str) -> dict:
             current = {"number": int(idea.group(1)), "line": number, "heading": heading,
                        "title": title, "mechanism": mechanism, "fields": []}
             ideas.append(current)
+            source_level = 0
             continue
         heading = _HEADING.match(line)
-        if heading:
+        if heading or (continued and _SETEXT.match(line)):
             current = None
-            if _is_sources_title(heading.group(2) or ""):
-                sources.append(number)
+            if heading:
+                level = len(heading.group(1))
+                title = heading.group(2) or ""
+                start = number
+            else:
+                level = 1 if line.lstrip().startswith("=") else 2
+                title, start = " ".join(lines[paragraph_start:number]), paragraph_start
+                # The underline turns the whole preceding paragraph into a heading.
+                if source_level:
+                    del source_body[source_paragraph_start:]
+            if level <= source_level:
+                source_level = 0
+            if _is_sources_title(title):
+                sources.append(start)
+                source_level = source_level or level
             continue
-        if _SOURCES_LINE.match(line):
+        source_label = _SOURCES_LINE.match(line)
+        if source_label:
             current = None
             sources.append(number)
+            source_level = source_level or 6
+            source_body.append(source_label.group(1) or "")
             continue
         priority = _PRIORITY.match(line)
         if priority:
             current = None
+            source_level = 0
             open_priority = [priority.group(1)]
             priorities.append({"line": number, "parts": open_priority})
             continue
+        if source_level:
+            if not continued:
+                source_paragraph_start = len(source_body)
+            source_body.append(line)
         bullet = _BULLET.match(line)
         if bullet:
             labeled = _label(bullet.group(1)) if current is not None else None
@@ -195,8 +223,8 @@ def parse_response(text: str) -> dict:
         end = priority["line"] + len(priority["parts"]) - 1
         priority["text"] = _join(priority.pop("parts"))
         priority["end"] = end
-    return {"ideas": ideas, "sources_lines": sources, "priorities": priorities,
-            "last_content_line": content_lines[-1] if content_lines else None}
+    return {"ideas": ideas, "sources_lines": sources, "sources_have_text": _has_source_text(source_body),
+            "priorities": priorities, "last_content_line": content_lines[-1] if content_lines else None}
 
 
 def idea_fields(idea: dict) -> dict[str, str]:
@@ -259,6 +287,8 @@ def check_response(parsed: dict, high_stakes: bool = False) -> list[str]:
         failures.append("the Sources section must come after the last idea")
     if high_stakes and not sources:
         failures.append("a high-stakes response needs a Sources section before the prioritized action")
+    elif high_stakes and not parsed.get("sources_have_text"):
+        failures.append("the high-stakes Sources section needs source text or an explicit verification limitation")
     return failures
 
 
@@ -289,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("response", type=Path, help="a Markdown response saved as UTF-8 text")
     parser.add_argument("--json", action="store_true", dest="as_json", help="print a machine-readable report")
     parser.add_argument("--high-stakes", action="store_true",
-                        help="also require a Sources section, as the skill does for high-stakes goals")
+                        help="require a Sources section with source text or an explicit verification limitation")
     args = parser.parse_args(argv)
     parsed = {"ideas": [], "sources_lines": [], "priorities": []}
     try:
