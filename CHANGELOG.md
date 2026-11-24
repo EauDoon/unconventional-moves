@@ -11,6 +11,8 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Fixed
 
+- Next installer patch: `--check` identifies extra and wrong-size files without reading their contents, streams matching-size comparisons, and refuses to certify a tree it cannot enumerate. Release gate: check a modified installation with missing, extra, truncated and same-length edited files on both supported operating systems. The report format and installed skill stay unchanged.
+
 - Reject an empty Sources section in high-stakes prose validation and import. A source declaration or an explicit verification limitation supplies the required text.
 - Keep complete-plan SHA-256 digests in revision comparisons after experiment or review-field changes; local changed values no longer replace the plan inputs while classifying review triggers.
 - Reject non-regular JSON input files without waiting for a named-pipe writer. Keep byte limits and descriptor-based checks on ordinary files.
