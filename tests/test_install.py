@@ -167,6 +167,26 @@ class CheckTests(unittest.TestCase):
                           result.stdout)
             self.assertEqual(tree(project), before)
 
+    def test_check_does_not_read_unexpected_or_wrong_size_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            installed = Path(td) / "skill"
+            self.assertEqual(run("--dest", installed).returncode, 0)
+            extra = installed / "large.bin"
+            changed = installed / "SKILL.md"
+            extra.write_bytes(b"not bundled")
+            changed.write_bytes(b"shortened")
+            real_open = Path.open
+
+            def guarded(path, *args, **kwargs):
+                if path in {extra, changed}:
+                    self.fail("unnecessary content read: " + str(path))
+                return real_open(path, *args, **kwargs)
+
+            with patch.object(Path, "open", guarded):
+                statuses = {row["path"]: row["status"] for row in install_skill.check(ROOT, installed)}
+            self.assertEqual(statuses["large.bin"], "extra")
+            self.assertEqual(statuses["SKILL.md"], "changed")
+
     def test_check_without_an_install_fails_and_creates_nothing(self):
         with tempfile.TemporaryDirectory() as td:
             result = run("--project", td, "--check")

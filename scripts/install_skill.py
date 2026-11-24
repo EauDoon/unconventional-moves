@@ -80,9 +80,13 @@ def check(root: Path, destination: Path) -> list[dict]:
     """Compare an installed copy with the bundled files without writing anything."""
     if os.path.islink(destination) or not destination.is_dir():
         raise InstallError("no installed skill directory at the destination")
-    expected = {relative: sha256(path.read_bytes()) for relative, path in bundled_files(root).items()}
+    expected = bundled_files(root)
+
+    def scan_error(error):
+        raise InstallError("could not inspect the entire installed skill: " + str(error))
+
     found: dict[str, str | None] = {}
-    for current, directories, names in os.walk(destination, followlinks=False):
+    for current, directories, names in os.walk(destination, onerror=scan_error, followlinks=False):
         base = Path(current)
         for name in [*directories, *names]:
             path = base / name
@@ -90,7 +94,16 @@ def check(root: Path, destination: Path) -> list[dict]:
             if path.is_symlink():
                 found[relative] = None  # Reported, never followed.
             elif path.is_file():
-                found[relative] = sha256(path.read_bytes())
+                source = expected.get(relative)
+                # An unexpected path or a length mismatch proves drift without
+                # loading potentially large local-only files into memory.
+                if source is None or path.stat().st_size != source.stat().st_size:
+                    found[relative] = None
+                else:
+                    with path.open("rb") as handle:
+                        found[relative] = hashlib.file_digest(handle, "sha256").hexdigest()
+            elif name in names:
+                found[relative] = None
     report = []
     for relative in sorted(expected.keys() | found.keys()):
         if relative not in found:
@@ -98,7 +111,11 @@ def check(root: Path, destination: Path) -> list[dict]:
         elif relative not in expected:
             status = "extra"
         else:
-            status = "identical" if found[relative] == expected[relative] else "changed"
+            status = "changed"
+            if found[relative] is not None:
+                with expected[relative].open("rb") as handle:
+                    if found[relative] == hashlib.file_digest(handle, "sha256").hexdigest():
+                        status = "identical"
         report.append({"path": relative, "status": status})
     return report
 
