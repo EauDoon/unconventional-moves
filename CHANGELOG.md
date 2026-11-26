@@ -15,6 +15,10 @@ The root `VERSION` file is the single source of the package version, and
 - Use `review --format markdown` to export the editorial findings and human review prompts as a worksheet.
 - Explore the offline experiment atlas in the checkout or extracted package. Its 3D map and linked directory trace artifacts from the brief to a verified handoff.
 
+### Changed
+
+- The experiment atlas shows the component picker above the map, direction markers on connections, and the selected component’s incoming and outgoing links separately.
+
 ### Fixed
 
 - The version-aware CLI now shows command help even if the supplied plan uses a different contract.
