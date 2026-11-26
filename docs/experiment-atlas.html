@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Experiment atlas · Unconventional Moves</title>
+  <style>
+    :root { color-scheme:dark; --ink:#f5f2e7; --dim:#bac6cd; --line:#34424c; --gold:#ffc76a; --mint:#8ee5d1;
+      font:16px/1.55 system-ui,sans-serif; color:var(--ink); background:#0c151d }
+    * { box-sizing:border-box } body { margin:0 } main { max-width:1250px; margin:auto; padding:26px clamp(16px,4vw,64px) 50px }
+    a { color:var(--mint); text-underline-offset:.2em } :focus-visible { outline:3px solid var(--gold); outline-offset:3px }
+    header { border-bottom:1px solid var(--line); padding-bottom:24px } small,.meta { color:var(--mint); font:700 .76rem/1.45 ui-monospace,monospace; letter-spacing:.09em; text-transform:uppercase }
+    header h1 { font:500 clamp(2.8rem,7vw,6rem)/1 Georgia,serif; letter-spacing:-.055em; margin:.28em 0 .2em }
+    h2,h3,p { margin:.45em 0 } p { color:var(--dim) } header p { max-width:66ch } .workspace { display:grid; grid-template-columns:minmax(0,2.3fr) minmax(225px,1fr); border:1px solid var(--line); margin-top:24px }
+    .map { min-width:0; padding:16px; background:radial-gradient(ellipse at 40% 40%,#173039 0%,#101c26 70%) }
+    #scene { width:100%; height:auto; aspect-ratio:1.7; display:block; touch-action:pan-y; border-bottom:1px solid var(--line) }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center } button,select { border:1px solid #60737e; border-radius:4px; padding:.6em .8em; background:#12212b; color:var(--ink); font:inherit; cursor:pointer; min-height:42px }
+    aside { padding:24px; border-left:1px solid var(--line); background:#14202a } aside h2 { font:500 2rem/1.12 Georgia,serif; margin:.5em 0 } aside label { display:block; margin-top:20px } select { max-width:100%; width:100%; margin-top:6px }
+    .directory { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(225px,100%),1fr)); gap:12px; margin-top:16px }
+    article { padding:18px; border:1px solid var(--line); background:#121e27 } article:target { border-color:var(--gold) }
+    article h3 { font-size:1.18rem } .next { margin-top:14px; font-size:.84rem } section h2 { margin-top:30px }
+    details { margin:18px 0; border-top:1px solid var(--line); padding:14px 0 } summary { cursor:pointer }
+    pre { overflow:auto; padding:12px; background:#091119; color:var(--mint); max-height:17em } .hint { font-size:.83rem }
+    @media (max-width:750px) { .workspace { grid-template-columns:1fr } aside { border:0; border-top:1px solid var(--line) } .map { padding:8px } #scene { aspect-ratio:1.28 } }
+    @media print { :root { color-scheme:light; color:#111; background:white } p,a,small,.meta { color:#222 } .workspace,details,header a { display:none } article { background:white; break-inside:avoid } }
+    [hidden] { display:none!important }
+  </style>
+</head>
+<body><main>
+  <header><a href="../README.md">Unconventional Moves</a><h1>Experiment atlas</h1><p>Trace a constrained goal from its first brief to a recoverable experiment. Each stop opens the artifact that defines it.</p></header>
+  <div class="workspace" id="explorer" hidden>
+    <div class="map"><svg id="scene" tabindex="0" role="group" aria-label="3D workflow map. Arrow keys rotate. Home resets. Use the component selector to inspect any node."></svg>
+      <div class="controls"><button id="left" aria-label="Rotate left">↶ Left</button><button id="right" aria-label="Rotate right">Right ↷</button><button id="home">Reset view</button></div>
+      <p class="hint">Drag horizontally or use arrow keys to rotate. Tap a node to inspect its connections.</p>
+    </div><aside><span class="meta" id="stage"></span><div aria-live="polite"><h2 id="name"></h2><p id="summary"></p><p id="connections"></p></div><a id="source">Open artifact</a>
+      <label for="choice">Inspect component</label><select id="choice"></select></aside>
+  </div>
+  <details hidden id="query"><summary>Inspect this node’s local query result</summary><pre>query Component($id: ID!) {
+  component(id: $id) { id name stage inputs outputs source }
+}</pre><pre id="result"></pre></details>
+  <section><h2>Component directory</h2><div class="directory">
+      <article id="brief" data-stage="Frame" data-position="-2.6,0.9,0.4" data-outputs="portfolio"><small>Frame</small><h3>Brief</h3><p>Write down the desired outcome, constraints, affected people and ordinary approach before looking for alternatives.</p><a href="../templates/worksheet.md">Open worksheet</a><p class="next">Feeds <a href="#portfolio">Portfolio</a>.</p></article>
+      <article id="portfolio" data-stage="Frame" data-position="-1.55,-0.6,-0.4" data-outputs="plan,import"><small>Frame</small><h3>Portfolio</h3><p>Compare five to seven moves with distinct mechanisms, reversible tests and explicit stop conditions.</p><a href="../skill/unconventional-moves/SKILL.md">Open skill instructions</a><p class="next">Feeds <a href="#plan">Plan contract</a> and <a href="#import">Prose import</a>.</p></article>
+      <article id="import" data-stage="Frame" data-position="-2.25,-1.75,0.7" data-outputs="plan"><small>Frame</small><h3>Prose import</h3><p>Check the structure of a completed response. Import its fields with an explicit goal to create a version 0.1 plan.</p><a href="../examples/example-response.md">Open worked response</a><p class="next">Feeds <a href="#plan">Plan contract</a>.</p></article>
+      <article id="plan" data-stage="Compare" data-position="-0.55,0.72,0.8" data-outputs="review,card"><small>Compare</small><h3>Plan contract</h3><p>Free-text bounds work in version 0.1. Version 0.2 adds a declared selection and measured experiments.</p><a href="version-decision.md">Open contract guide</a><p class="next">Feeds <a href="#review">Review desk</a> and <a href="#card">Experiment card</a>.</p></article>
+      <article id="review" data-stage="Compare" data-position="0.15,1.85,-0.55" data-outputs=""><small>Compare</small><h3>Review desk</h3><p>List move IDs, inspect one move, contrast alternatives field by field, and export a human review worksheet.</p><a href="../scripts/moves.py">Open CLI implementation</a><p class="next">End of this review path.</p></article>
+      <article id="card" data-stage="Measure" data-position="0.55,-0.48,-0.8" data-outputs="observation,handoff"><small>Measure</small><h3>Experiment card</h3><p>A selected version 0.2 move supplies the hypothesis, baseline, target, effort, exposure and rollback.</p><a href="../examples/bounded-plan.json">Open example plan</a><p class="next">Feeds <a href="#observation">Observation</a> and <a href="#handoff">Handoff</a>.</p></article>
+      <article id="observation" data-stage="Measure" data-position="1.65,-1.5,0.65" data-outputs="handoff"><small>Measure</small><h3>Observation</h3><p>Record what happened against the plan digest. Review the measurement and stop reasons before any further trial.</p><a href="../examples/bounded-outcome.json">Open outcome example</a><p class="next">Feeds <a href="#handoff">Handoff</a>.</p></article>
+      <article id="handoff" data-stage="Recover" data-position="2.35,0.85,-0.2" data-outputs=""><small>Recover</small><h3>Handoff</h3><p>Package the original plan with its records. Verify the digest and derived reviews before restoring a local copy.</p><a href="resuming-handoffs.md">Open recovery guide</a><p class="next">End of this review path.</p></article>
+  </div></section>
+</main><script>
+"use strict";
+const byId = id => document.getElementById(id);
+const cards = Array.from(document.querySelectorAll(".directory article"));
+const nodes = cards.map(card => ({
+  id:card.id, name:card.querySelector("h3").textContent, stage:card.dataset.stage,
+  summary:card.querySelector("p").textContent, source:card.querySelector("a").getAttribute("href"),
+  pos:card.dataset.position.split(",").map(Number), outputs:card.dataset.outputs.split(",").filter(Boolean)
+}));
+const lookup = new Map(nodes.map(node => [node.id,node]));
+const scene = byId("scene"), choice = byId("choice");
+let yaw = 0, pitch = 0.03, active = "plan";
+function element(tag, attributes) {
+  const item = document.createElementNS("http://www.w3.org/2000/svg",tag);
+  for (const [key,value] of Object.entries(attributes)) item.setAttribute(key,value);
+  return item;
+}
+function draw() {
+  const width = Math.max(scene.clientWidth,280), height = scene.clientHeight || 300;
+  scene.setAttribute("viewBox",`0 0 ${width} ${height}`);
+  const scale = Math.min(width/6.65,height/4.85);
+  const points = new Map(nodes.map(({id,pos:[x,y,z]}) => {
+    const a = x*Math.cos(yaw)-z*Math.sin(yaw), b = x*Math.sin(yaw)+z*Math.cos(yaw);
+    const depth = b*Math.cos(pitch)+y*Math.sin(pitch), k = 8/(8-depth);
+    return [id,{x:width/2+a*scale*k,y:height/2-(y*Math.cos(pitch)-b*Math.sin(pitch))*scale*k,z:depth,k}];
+  }));
+  scene.replaceChildren();
+  for (const node of nodes) {
+    const a = points.get(node.id);
+    for (const id of node.outputs) {
+      const b = points.get(id), lit = active === node.id || active === id;
+      scene.append(element("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:lit?"#ffc76a":"#627582","stroke-width":lit?2:1}));
+    }
+  }
+  for (const node of [...nodes].sort((a,b)=>points.get(a.id).z-points.get(b.id).z)) {
+    const p = points.get(node.id), focused = node.id === active;
+    const group = element("g",{"data-id":node.id,transform:`translate(${p.x} ${p.y})`,cursor:"pointer","aria-hidden":"true"});
+    group.append(element("circle",{r:19,fill:"transparent"}));
+    if (focused) group.append(element("circle",{r:14,fill:"#242a26",stroke:"#ffc76a"}));
+    group.append(element("circle",{r:(focused?7:5)*p.k,fill:focused?"#ffc76a":"#8ee5d1"}));
+    const text = element("text",{y:p.y<30?24:-17,"text-anchor":"middle",fill:"#f5f2e7",stroke:"#101c26","stroke-width":3,"paint-order":"stroke","font-size":width<450?10:13});
+    text.textContent = node.name;
+    group.append(text); scene.append(group);
+  }
+}
+function select(id) {
+  const node = lookup.get(id);
+  if (!node) return;
+  active = id; choice.value = id;
+  byId("name").textContent = node.name; byId("stage").textContent = node.stage;
+  byId("summary").textContent = node.summary; byId("source").href = node.source;
+  const inputs = nodes.filter(n=>n.outputs.includes(id)).map(n=>n.id);
+  const names = ids => ids.map(key=>lookup.get(key).name).join(", ") || "None";
+  byId("connections").textContent = "From: " + names(inputs) + ". Feeds: " + names(node.outputs) + ".";
+  byId("result").textContent = JSON.stringify({data:{component:{id,name:node.name,stage:node.stage,inputs,outputs:node.outputs,source:node.source}}},null,2);
+  draw();
+}
+for (const node of nodes) choice.add(new Option(node.name,node.id));
+choice.addEventListener("change",()=>select(choice.value));
+const reset = () => { yaw=0; pitch=0.03; draw(); };
+function rotate(dx,dy) { yaw+=dx; pitch=Math.max(-0.6,Math.min(0.6,pitch+dy)); draw(); }
+byId("left").onclick = ()=>rotate(-0.19,0);
+byId("right").onclick = ()=>rotate(0.19,0); byId("home").onclick = reset;
+scene.addEventListener("keydown",e=>{
+  const turns={ArrowLeft:[-0.13,0],ArrowRight:[0.13,0],ArrowUp:[0,0.1],ArrowDown:[0,-0.1]};
+  if (e.key==="Home") { e.preventDefault(); reset(); }
+  else if (turns[e.key]) { e.preventDefault(); rotate(...turns[e.key]); }
+});
+let drag;
+scene.addEventListener("pointerdown",e=>{
+  if (!e.isPrimary || e.button!==0) return;
+  drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false,id:e.target.closest("[data-id]")?.dataset.id};
+  scene.setPointerCapture(e.pointerId);
+});
+scene.addEventListener("pointermove",e=>{
+  if (!drag || !e.isPrimary) return;
+  if (Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>4) drag.moved=true;
+  if (drag.moved) rotate((e.clientX-drag.x)*0.009,(e.clientY-drag.y)*0.005);
+  drag.x=e.clientX; drag.y=e.clientY;
+});
+scene.addEventListener("pointerup",e=>{ if (!e.isPrimary) return; if (drag && !drag.moved) select(drag.id); drag=null; });
+scene.addEventListener("pointercancel",()=>{drag=null;});
+byId("explorer").hidden=false; byId("query").hidden=false;
+select(lookup.has(location.hash.slice(1))?location.hash.slice(1):active);
+window.addEventListener("hashchange",()=>select(location.hash.slice(1)));
+window.addEventListener("resize",draw);
+</script></body></html>

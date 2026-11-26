@@ -57,7 +57,7 @@ V01_REQUIRED_COMMANDS = frozenset({"experiments-draft", "promote"})
 
 # Commands that accept either v0.1 or v0.2 plans at argv[1].
 SHARED_COMMANDS = frozenset({
-    "render", "review", "sources",
+    "render", "review", "sources", "index", "inspect", "contrast",
 })
 
 # compare reads two plans, so argv[1] is only one of them; it is gated by plan
@@ -107,6 +107,9 @@ def plan_argument(argv: list[str]) -> str | None:
 def gate_version(command: str, argv: list[str]) -> int | None:
     """Return a non-zero exit code to refuse, or None to pass through."""
     if not argv:
+        return None
+    options = argv[1:argv.index("--")] if "--" in argv else argv[1:]
+    if "-h" in options or "--help" in options:
         return None
     if command in NO_PLAN_COMMANDS:
         return None

@@ -96,6 +96,48 @@ def markdown_text(value: object) -> str:
     return html.escape(text, quote=False)
 
 
+def move_by_id(plan: dict, move_id: str) -> dict:
+    for move in plan["moves"]:
+        if move["id"] == move_id:
+            return move
+    raise ValueError(f"unknown move ID: {move_id}")
+
+
+def plan_index(plan: dict) -> dict:
+    return {"goal": plan["goal"], "contract_version": plan["contract_version"],
+            "plan_sha256": plan_digest(plan), "selected_move_id": plan.get("selected_move_id"),
+            "moves": [{key: move[key] for key in ("id", "title", "mechanism")} for move in plan["moves"]]}
+
+
+def contrast_moves(plan: dict, first_id: str, second_id: str) -> dict:
+    if first_id == second_id:
+        raise ValueError("choose two distinct move IDs")
+    first, second = (move_by_id(plan, key) for key in (first_id, second_id))
+    rows = [{"field": key, "first": first[key], "second": second[key]}
+            for key in ("title", "mechanism", "concrete_move", "why_overlooked", "test_48h",
+                        "success_signal", "stop_condition", "bounds", "evidence_status")]
+    if "experiment" in first:
+        for key in sorted(first["experiment"]):
+            rows.append({"field": "experiment." + key, "first": first["experiment"][key],
+                         "second": second["experiment"][key]})
+    return {"plan_sha256": plan_digest(plan), "first_id": first_id, "second_id": second_id,
+            "selected_move_id": plan.get("selected_move_id"), "fields": rows}
+
+
+def review_worksheet(plan: dict, review: dict) -> str:
+    lines = ["# Portfolio review worksheet", "", markdown_text(plan["goal"]), "",
+             "Plan SHA-256: " + plan_digest(plan), "", "## Findings", ""]
+    for item in review["findings"]:
+        context = " / ".join(markdown_text(item[key]) for key in ("move_id", "related_move_id") if key in item)
+        lines.append("- " + markdown_text(item["message"]) + (" (" + context + ")" if context else ""))
+    if not review["findings"]:
+        lines.append("The editorial check raised no findings.")
+    lines.extend(["", "## Human checks", ""])
+    lines.extend("- [ ] " + question for question in review["human_checks"])
+    lines.extend(["", review["limitation"], ""])
+    return "\n".join(lines)
+
+
 def render_plan(plan: dict) -> str:
     lines = ["# Unconventional Moves plan", "", markdown_text(plan["goal"]), "",
              "Declared plan only. Human review is required before any experiment.", ""]
@@ -1072,7 +1114,17 @@ def main(argv: list[str] | None = None) -> int:
     unpack = commands.add_parser("unpack-handoff", help="Verify a handoff and restore its complete supplied history for review")
     unpack.add_argument("bundle", type=Path)
     unpack.add_argument("--output-dir", type=Path, required=True)
+    index = commands.add_parser("index", help="List move IDs and mechanisms with their plan digest")
+    inspect = commands.add_parser("inspect", help="Read one complete move by ID from a validated plan")
+    contrast = commands.add_parser("contrast", help="Compare two alternatives in the same plan field by field")
+    for command in (index, inspect, contrast):
+        command.add_argument("plan", type=Path)
+        command.add_argument("--output", type=Path)
+    inspect.add_argument("--move-id", required=True)
+    contrast.add_argument("--first", required=True, metavar="ID")
+    contrast.add_argument("--second", required=True, metavar="ID")
     review = commands.add_parser("review", help="Flag repeated text and unclear evidence labels for human review")
+    review.add_argument("--format", choices=["json", "markdown"], default="json")
     review.add_argument("plan", type=Path)
     review.add_argument("--output", type=Path)
     render = commands.add_parser("render", help="Render a validated plan as inert Markdown or HTML")
@@ -1166,8 +1218,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "select":
             result = select_plan(plan_input(args.plan), args.move_id, args.reason, args.first_step)
             emit(json.dumps(result, indent=2) + "\n", args.output)
+        elif args.command == "index":
+            emit(json.dumps(plan_index(plan_input(args.plan)), indent=2) + "\n", args.output)
+        elif args.command == "inspect":
+            emit(json.dumps(move_by_id(plan_input(args.plan), args.move_id), indent=2) + "\n", args.output)
+        elif args.command == "contrast":
+            result = contrast_moves(plan_input(args.plan), args.first, args.second)
+            emit(json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "review":
-            emit(json.dumps(review_plan(plan_input(args.plan)), indent=2) + "\n", args.output)
+            plan = plan_input(args.plan)
+            result = review_plan(plan)
+            emit(review_worksheet(plan, result) if args.format == "markdown" else json.dumps(result, indent=2) + "\n", args.output)
         elif args.command == "render":
             plan = plan_input(args.plan)
             emit(render_html(plan) if args.format == "html" else render_plan(plan), args.output)
