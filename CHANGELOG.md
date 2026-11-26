@@ -15,12 +15,9 @@ The root `VERSION` file is the single source of the package version, and
 - Use `review --format markdown` to export the editorial findings and human review prompts as a worksheet.
 - Explore the offline experiment atlas in the checkout or extracted package. Its 3D map and linked directory trace artifacts from the brief to a verified handoff.
 
-
 ### Fixed
 
 - The version-aware CLI now shows command help even if the supplied plan uses a different contract.
-
-- Delegate subcommand help to the CLI before version detection, so supplying a v0.1 plan while requesting help for a v0.2 command displays usage.
 
 - Next installer patch: `--check` identifies extra and wrong-size files without reading their contents, streams matching-size comparisons, and refuses to certify a tree it cannot enumerate. Release gate: check a modified installation with missing, extra, truncated and same-length edited files on both supported operating systems. The report format and installed skill stay unchanged.
 
