@@ -68,7 +68,7 @@ before `moves.py` runs. Optional flags may precede that path.
 - v0.1-only commands: `experiments-draft`, `promote`. They turn a v0.1
   plan into a v0.2 revision, so a v0.2 input is refused, by the shim and
   by `moves.py` itself.
-- Commands that accept either version: `render`, `review`, `sources`.
+- Commands that accept either version: `render`, `review`, `sources`, `index`, `inspect`, and `contrast`.
 - `compare` takes two plans, so it is gated by plan validation in
   `moves.py` rather than by the shim, and it works on either version.
 - Commands with no plan argument: `init`, `import-response`,

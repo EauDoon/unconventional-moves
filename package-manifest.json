@@ -7,6 +7,7 @@
   "README.md",
   "SECURITY.md",
   "VERSION",
+  "docs/experiment-atlas.html",
   "docs/experiment-contract.md",
   "docs/local-workflow.md",
   "docs/release-notes-v0.1.0.md",
@@ -86,6 +87,7 @@
   "tests/test_package.py",
   "tests/test_promote.py",
   "tests/test_response.py",
+  "tests/test_review_desk.py",
   "tests/test_validate.py",
   "tests/test_workflow.py"
 ]

@@ -11,6 +11,31 @@ The skill separates the outcome from the assumed method, compares the ordinary
 approach, and explains why each move could work here and what would make it fail.
 Tests can begin within 48 hours; that does not promise proof in two days.
 
+## Explore the experiment atlas
+
+Open [docs/experiment-atlas.html](docs/experiment-atlas.html) in a browser from a checkout
+or extracted package. The GitHub file view shows the source. Download the repository
+ZIP from **Code**, extract it, then open the HTML file to keep the artifact links working.
+The atlas connects the brief, skill, prose import, contracts, review, experiment card
+and recovery path. Select a component to inspect its inputs, outputs and local query
+result. Drag or use the arrow keys to rotate, or use the component selector. The map
+moves only on input. The linked directory also works with JavaScript disabled.
+
+## Review alternatives in one plan
+
+Both contracts support these commands. The index reports stable IDs, mechanisms,
+the declared selection if present, and the canonical plan digest. Inspect a single
+ID to read its original fields. Contrast two IDs to line up their evidence, bounds,
+stop conditions and, on a v0.2 plan, measured experiment fields. A worksheet
+turns the existing editorial findings into a Markdown checklist for human review.
+
+```sh
+python scripts/moves_cli.py index examples/example-plan.json
+python scripts/moves_cli.py inspect examples/example-plan.json --move-id move-01
+python scripts/moves_cli.py contrast examples/bounded-plan.json --first move-01 --second move-02
+python scripts/moves_cli.py review examples/bounded-plan.json --format markdown
+```
+
 ## Install and invoke
 
 Copy `skill/unconventional-moves` from this repository into
