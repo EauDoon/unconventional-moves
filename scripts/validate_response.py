@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -299,7 +301,12 @@ def validate_response_text(text: str, high_stakes: bool = False) -> tuple[list[s
 
 def read_response_file(path: Path) -> str:
     """Read at most the plan byte bound as strict UTF-8, without a leading BOM."""
-    with path.open("rb") as handle:
+    # Opening a named pipe in blocking mode waits for a writer before any size
+    # check, so open without blocking and inspect the opened descriptor.
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(path, flags), "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("response must be a regular file")
         raw = handle.read(MAX_PLAN_BYTES + 1)
     if len(raw) > MAX_PLAN_BYTES:
         raise ValueError(f"response exceeds {MAX_PLAN_BYTES} bytes")
