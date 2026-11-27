@@ -295,6 +295,21 @@ class CommandLineTests(unittest.TestCase):
             result = run_cli(Path(td) / "missing.md")
             self.assertEqual((result.returncode, result.stdout), (1, b"FAIL response file cannot be read\n"))
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "named pipes require POSIX")
+    def test_named_pipe_is_rejected_without_waiting_for_a_writer(self):
+        with tempfile.TemporaryDirectory() as td:
+            pipe = Path(td) / "response.md"
+            os.mkfifo(pipe)
+            result = run_cli(pipe, timeout=5)
+            self.assertEqual((result.returncode, result.stdout), (1, b"FAIL response must be a regular file\n"))
+            output = Path(td) / "plan.json"
+            imported = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/moves.py"), "import-response", str(pipe),
+                 "--goal", "Synthetic goal", "--output", str(output)],
+                capture_output=True, timeout=5, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+            self.assertEqual((imported.returncode, imported.stderr), (1, b"FAIL response must be a regular file\n"))
+            self.assertFalse(output.exists())
+
     def test_text_failures_are_single_escaped_lines(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "response.md"

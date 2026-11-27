@@ -11,6 +11,40 @@ The skill separates the outcome from the assumed method, compares the ordinary
 approach, and explains why each move could work here and what would make it fail.
 Tests can begin within 48 hours; that does not promise proof in two days.
 
+## Quick start
+
+This is a packaged LLM skill: Markdown instructions plus two JSON schemas that
+an agent runtime with skill support loads on request. It is for a person or
+team with a goal, real constraints, and an ordinary approach that has stalled.
+The installed skill needs no Python, account, or API key.
+
+From a checkout or an extracted package, with Python 3.11 to 3.14:
+
+```sh
+python scripts/install_skill.py --project path/to/project
+python scripts/install_skill.py --project path/to/project --check
+```
+
+The first command copies the skill into
+`path/to/project/.agents/skills/unconventional-moves`, the project location
+Codex reads. The second confirms that the copy matches the bundled files. For
+another runtime, name its skill directory with `--dest`; Claude Code, for
+example, reads `path/to/project/.claude/skills/unconventional-moves`. Only the
+copy is checked here. How each runtime routes a request to the skill is not.
+
+Then ask for a plan in that project:
+
+```text
+Use $unconventional-moves for this goal: [desired outcome].
+Constraints: [time, budget, resources, non-negotiables, affected people].
+Current approach: [what we have tried and what seems stuck].
+```
+
+To see the answer shape before installing, read the
+[worked response](examples/example-response.md). To check a saved answer
+against that shape, run `python scripts/validate_response.py response.md`.
+[Install and invoke](#install-and-invoke) covers upgrades and the manual copy.
+
 ## Explore the experiment atlas
 
 Open [docs/experiment-atlas.html](docs/experiment-atlas.html) in a browser from a checkout
