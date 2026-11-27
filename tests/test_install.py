@@ -109,6 +109,17 @@ class InstallTests(unittest.TestCase):
             self.assertIn("parent directory does not exist", result.stderr)
             self.assertEqual(list(Path(td).iterdir()), [])
 
+    def test_readme_quick_start_states_the_dest_parent_requirement(self):
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        quick = " ".join(text.split("## Quick start", 1)[1].split("\n## ", 1)[0].split())
+        self.assertIn("`path/to/project/.claude/skills/unconventional-moves`", quick)
+        with tempfile.TemporaryDirectory() as td:
+            result = run("--dest", Path(td) / ".claude" / "skills" / "unconventional-moves")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("parent directory does not exist", result.stderr)
+            self.assertEqual(list(Path(td).iterdir()), [])
+        self.assertIn("parent of a `--dest` directory must already exist", quick)
+
     def test_failed_publication_leaves_no_destination_or_staging(self):
         with tempfile.TemporaryDirectory() as td:
             destination = Path(td) / "skill"

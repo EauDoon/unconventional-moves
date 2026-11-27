@@ -31,8 +31,10 @@ The first command copies the skill into
 `path/to/project/.agents/skills/unconventional-moves`, the project location
 Codex reads. The second confirms that the copy matches the bundled files. For
 another runtime, name its skill directory with `--dest`; Claude Code, for
-example, reads `path/to/project/.claude/skills/unconventional-moves`. Only the
-copy is checked here. How each runtime routes a request to the skill is not.
+example, reads `path/to/project/.claude/skills/unconventional-moves`. The
+parent of a `--dest` directory must already exist, so create
+`path/to/project/.claude/skills` first. Only the copy is checked here. How
+each runtime routes a request to the skill is not.
 
 Then ask for a plan in that project:
 
