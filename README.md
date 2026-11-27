@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/assets/banner.svg" alt="Unconventional Moves, an LLM skill. It turns a constrained goal into five to seven practical approaches that work through different mechanisms, then picks one small experiment that can begin within 48 hours. Shown as several curved paths from a start to a goal beside the ordinary straight one; a probe runs out along one path to a checkpoint and comes back." width="100%"></p>
+
 # Unconventional Moves
 
 [![build](https://img.shields.io/github/actions/workflow/status/EauDoon/unconventional-moves/ci.yml?branch=main)](https://github.com/EauDoon/unconventional-moves/actions)
