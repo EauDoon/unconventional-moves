@@ -17,11 +17,13 @@ The root `VERSION` file is the single source of the package version, and
 
 ### Changed
 
+- The README opens with a quick start: who the skill is for, the two installer commands, the invocation prompt, and the worked response.
 - The experiment atlas shows the component picker above the map, direction markers on connections, and the selected component’s incoming and outgoing links separately.
 
 ### Fixed
 
 - The version-aware CLI now shows command help even if the supplied plan uses a different contract.
+- `validate_response.py` and `moves.py import-response` reject a named pipe or other non-regular response file with `FAIL response must be a regular file` instead of waiting for a writer. JSON inputs already behaved this way.
 
 - Next installer patch: `--check` identifies extra and wrong-size files without reading their contents, streams matching-size comparisons, and refuses to certify a tree it cannot enumerate. Release gate: check a modified installation with missing, extra, truncated and same-length edited files on both supported operating systems. The report format and installed skill stay unchanged.
 
